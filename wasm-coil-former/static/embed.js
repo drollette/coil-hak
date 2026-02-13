@@ -4,7 +4,7 @@
  * Drop this script tag into any page on w7hak.com (or anywhere else):
  *
  *   <div id="coil-former"></div>
- *   <script src="https://coil-former.pages.dev/embed.js"
+ *   <script src="https://coil.w7hak.com/embed.js"
  *           data-target="#coil-former"></script>
  *
  * It creates an iframe pointing at the hosted app, sized to fit.

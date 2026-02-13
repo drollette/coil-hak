@@ -1,6 +1,6 @@
 # W7HAK Coil Former – WASM Plugin
 
-A parametric coil-former generator for ham radio phasing lines, built in **Rust** and compiled to **WebAssembly**. Designed to run on **Cloudflare Pages** and be embedded as a plugin on [w7hak.com](https://w7hak.com).
+A parametric coil-former generator for ham radio phasing lines, built in **Rust** and compiled to **WebAssembly**. Hosted on **Cloudflare Pages** at [coil.w7hak.com](https://coil.w7hak.com) and embeddable as a plugin on [w7hak.com](https://w7hak.com).
 
 ## Features
 
@@ -57,13 +57,23 @@ make test
 make deploy
 ```
 
+### Custom Domain Setup
+
+The app is served at **coil.w7hak.com**. To configure this:
+
+1. In Cloudflare Dashboard, go to **Pages > coil-former > Custom domains**
+2. Add `coil.w7hak.com`
+3. Cloudflare will automatically provision the DNS CNAME and TLS certificate
+
+The `wrangler.toml` already includes the route binding for `coil.w7hak.com/*`.
+
 ## Embedding on w7hak.com
 
 Add the plugin to any page with:
 
 ```html
 <div id="coil-former"></div>
-<script src="https://coil-former.pages.dev/embed.js"
+<script src="https://coil.w7hak.com/embed.js"
         data-target="#coil-former"
         data-height="700px"></script>
 ```
