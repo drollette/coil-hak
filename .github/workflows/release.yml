@@ -1,51 +1,113 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
-      - 'v[0-9]+.[0-9]+.[0-9]+-*'
-  workflow_call:
+  workflow_dispatch:
     inputs:
-      tag:
-        description: 'The version tag (e.g. v0.1.1-rc-1)'
+      bump:
+        description: 'Semver bump type (major requires explicit selection)'
         required: true
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+      prerelease:
+        description: 'Pre-release label (e.g. "beta", "rc.1"). Leave empty for stable.'
+        required: false
         type: string
-    secrets:
-      CLOUDFLARE_API_TOKEN:
-        required: true
-      CLOUDFLARE_ACCOUNT_ID:
-        required: true
 
 permissions:
   contents: write
 
 env:
   CARGO_TERM_COLOR: always
-  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
+  bump:
+    name: Bump version & tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Read current version
+        id: current
+        run: |
+          VERSION=$(grep '^version' wasm-coil-former/Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Current version: $VERSION"
+
+      - name: Compute next version
+        id: next
+        run: |
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${{ steps.current.outputs.version }}"
+          # Strip any existing pre-release suffix from PATCH
+          PATCH="${PATCH%%-*}"
+
+          case "${{ inputs.bump }}" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH + 1)) ;;
+          esac
+
+          NEXT="${MAJOR}.${MINOR}.${PATCH}"
+          if [ -n "${{ inputs.prerelease }}" ]; then
+            NEXT="${NEXT}-${{ inputs.prerelease }}"
+          fi
+
+          echo "version=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "Next version: $NEXT"
+
+      - name: Update Cargo.toml
+        run: |
+          sed -i "0,/^version = \".*\"/{s/^version = \".*\"/version = \"${{ steps.next.outputs.version }}\"/}" \
+            wasm-coil-former/Cargo.toml
+
+      - name: Update package.json
+        run: |
+          sed -i "s/\"version\": \".*\"/\"version\": \"${{ steps.next.outputs.version }}\"/" \
+            wasm-coil-former/package.json
+
+      - name: Commit & tag
+        run: |
+          git add wasm-coil-former/Cargo.toml wasm-coil-former/package.json
+          git commit -m "chore: bump version to ${{ steps.next.outputs.version }}"
+          git tag "v${{ steps.next.outputs.version }}"
+          git push origin HEAD --tags
+
+      - name: Set tag output
+        id: tag
+        run: echo "tag=v${{ steps.next.outputs.version }}" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        run: |
+          echo "### Version bumped" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **From:** ${{ steps.current.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **To:** ${{ steps.next.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Tag:** v${{ steps.next.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+
   build-and-release:
     name: Build & Create Release
+    needs: bump
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: wasm-coil-former
+    env:
+      RELEASE_TAG: ${{ needs.bump.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref_name }}
-
-      - name: Validate tag matches Cargo.toml version
-        run: |
-          TAG_VERSION="${RELEASE_TAG#v}"
-          CARGO_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
-          echo "Tag version:   $TAG_VERSION"
-          echo "Cargo version: $CARGO_VERSION"
-          if [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
-            echo "::error::Tag version ($TAG_VERSION) does not match Cargo.toml ($CARGO_VERSION)"
-            exit 1
-          fi
+          ref: ${{ needs.bump.outputs.tag }}
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -78,6 +140,12 @@ jobs:
           cp pkg/wasm_coil_former_bg.wasm dist/
           cp pkg/wasm_coil_former.js dist/
 
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coil-former-dist
+          path: wasm-coil-former/dist/
+
       - name: Create release archive
         run: |
           cd dist
@@ -98,31 +166,12 @@ jobs:
     name: Deploy to Cloudflare Pages
     needs: build-and-release
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: wasm-coil-former
     steps:
-      - uses: actions/checkout@v4
+      - name: Download dist artifact
+        uses: actions/download-artifact@v4
         with:
-          ref: ${{ inputs.tag || github.ref_name }}
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-
-      - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-
-      - name: Build WASM
-        run: wasm-pack build --target web --out-dir pkg --release
-
-      - name: Assemble dist
-        run: |
-          mkdir -p dist
-          cp static/* dist/
-          cp pkg/wasm_coil_former_bg.wasm dist/
-          cp pkg/wasm_coil_former.js dist/
+          name: coil-former-dist
+          path: dist
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
@@ -130,4 +179,3 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy dist --project-name=coil-hak
-          workingDirectory: wasm-coil-former
