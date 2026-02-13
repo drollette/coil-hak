@@ -108,8 +108,7 @@ impl TriMesh {
     pub fn append(&mut self, other: &TriMesh) {
         let base = (self.positions.len() / 3) as u32;
         self.positions.extend_from_slice(&other.positions);
-        self.indices
-            .extend(other.indices.iter().map(|i| i + base));
+        self.indices.extend(other.indices.iter().map(|i| i + base));
     }
 
     /// Number of vertices.
@@ -187,8 +186,7 @@ pub fn make_frustum(r_bottom: f64, r_top: f64, height: f64, segments: u32) -> Tr
         }
     }
     mesh.positions.extend_from_slice(&[0.0, 0.0, 0.0]);
-    mesh.positions
-        .extend_from_slice(&[0.0, 0.0, height as f32]);
+    mesh.positions.extend_from_slice(&[0.0, 0.0, height as f32]);
 
     let bot_center = (2 * segs) as u32;
     let top_center = (2 * segs + 1) as u32;
@@ -329,12 +327,7 @@ fn build_helix_groove(d: &CoilDerived) -> TriMesh {
         rotate_y(&mut seg, -pitch_angle);
 
         // Position on cylinder surface
-        translate(
-            &mut seg,
-            (d.cylinder_r - d.v_depth) as f32,
-            0.0,
-            0.0,
-        );
+        translate(&mut seg, (d.cylinder_r - d.v_depth) as f32, 0.0, 0.0);
         rotate_z(&mut seg, mid_a);
         translate(&mut seg, 0.0, 0.0, mid_z);
 
