@@ -123,27 +123,19 @@ def build_coil_former(
     )
     result = result.cut(groove)
 
-    # ── entry / exit tunnels ─────────────────────────────────
-    def _tunnel(p_from, p_to):
-        direction = p_to - p_from
-        solid = cq.Solid.makeCylinder(
-            r_wire, direction.Length, pnt=p_from, dir=direction
-        )
+    # ── entry / exit tunnels (purely radial for clean round holes) ──
+    def _radial_tunnel(z, angle=0.0):
+        overshoot = 2.0
+        length = cylinder_r + center_bore_r + 2 * overshoot
+        dir_vec = cq.Vector(math.cos(angle), math.sin(angle), 0)
+        start_pt = cq.Vector(0, 0, z) - dir_vec * (center_bore_r + overshoot)
+        solid = cq.Solid.makeCylinder(r_wire, length, pnt=start_pt, dir=dir_vec)
         return cq.Workplane("XY").newObject([solid])
 
-    result = result.cut(
-        _tunnel(cq.Vector(0, 0, start_z - 4),
-                cq.Vector(cylinder_r, 0, start_z))
-    )
+    result = result.cut(_radial_tunnel(start_z, angle=0.0))
 
     end_angle = -2.0 * math.pi * calc_turns
-    result = result.cut(
-        _tunnel(
-            cq.Vector(cylinder_r * math.cos(end_angle),
-                      cylinder_r * math.sin(end_angle), end_z),
-            cq.Vector(0, 0, end_z + 4),
-        )
-    )
+    result = result.cut(_radial_tunnel(end_z, angle=end_angle))
 
     return result, info
 
