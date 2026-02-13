@@ -1,6 +1,6 @@
 # Phasing Coil Former Generator
 
-[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/drollette/parametric-coil-former/master)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/drollette/parametric-coil-former/main)
 
 An OpenSCAD parametric generator for 3D-printable phasing coil formers, designed for HAM radio antenna phasing lines.
 
@@ -38,7 +38,7 @@ Edit these values at the top of `phasing_coil.scad`:
 
 Click the Binder badge above or use the link below to launch an interactive Jupyter environment with CadQuery and jupyter-cadquery pre-installed:
 
-https://mybinder.org/v2/gh/drollette/parametric-coil-former/master
+https://mybinder.org/v2/gh/drollette/parametric-coil-former/main
 
 Once the environment starts, open `viewer_check.ipynb` to verify that CadQuery rendering is working.
 
