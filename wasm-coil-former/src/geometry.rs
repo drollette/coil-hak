@@ -91,10 +91,10 @@ impl CoilDerived {
         let entry_angle = 0.0;
         let exit_angle = ((-2.0 * PI * calc_turns) % (2.0 * PI) + 2.0 * PI) % (2.0 * PI);
 
-        // Channel extension: extends from groove surface to the center of the bore
-        // This is the wall thickness (cylinder_r - center_bore_r) plus half the bore diameter
-        let wall_thickness = cylinder_r - center_bore_r;
-        let channel_extension = wall_thickness + center_bore_r;
+        // Channel extension: axial distance the wire slot extends beyond the
+        // winding zone.  Half the bore diameter gives a proportional opening
+        // that won't cut through ribs or end caps.
+        let channel_extension = center_bore_r;
 
         Self {
             rib_diam,
