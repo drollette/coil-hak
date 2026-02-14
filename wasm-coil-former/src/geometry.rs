@@ -91,10 +91,10 @@ impl CoilDerived {
         let entry_angle = 0.0;
         let exit_angle = ((-2.0 * PI * calc_turns) % (2.0 * PI) + 2.0 * PI) % (2.0 * PI);
 
-        // Channel extension: distance from groove surface to bore, with extra margin
-        // Wall thickness is (cylinder_r - center_bore_r), add 50% margin for clean exit
+        // Channel extension: extends from groove surface to the center of the bore
+        // This is the wall thickness (cylinder_r - center_bore_r) plus half the bore diameter
         let wall_thickness = cylinder_r - center_bore_r;
-        let channel_extension = wall_thickness * 1.5;
+        let channel_extension = wall_thickness + center_bore_r;
 
         Self {
             rib_diam,
