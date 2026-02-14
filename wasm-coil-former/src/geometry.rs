@@ -447,7 +447,10 @@ fn radius_at(d: &CoilDerived, z: f64, theta: f64) -> f64 {
 
     let channel = channel_factor_at(d, z, theta);
     if channel > 0.0 {
-        lerp(r_grooved, d.center_bore_r, channel).max(d.center_bore_r)
+        // Channel creates a uniform cylindrical tunnel through the wall.
+        // Anywhere inside the channel (factor > 0), cut radius down to bore
+        // to maintain constant wire clearance all the way through.
+        d.center_bore_r
     } else {
         r_grooved.max(d.center_bore_r + 0.1)
     }
