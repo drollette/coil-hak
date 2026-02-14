@@ -60,6 +60,8 @@ pub struct CoilDerived {
     pub entry_angle: f64,
     /// Exit-hole angle, normalised to [0, 2π).
     pub exit_angle: f64,
+    /// Channel extension distance from groove to bore (wall thickness + margin).
+    pub channel_extension: f64,
 }
 
 impl CoilDerived {
@@ -89,6 +91,11 @@ impl CoilDerived {
         let entry_angle = 0.0;
         let exit_angle = ((-2.0 * PI * calc_turns) % (2.0 * PI) + 2.0 * PI) % (2.0 * PI);
 
+        // Channel extension: distance from groove surface to bore, with extra margin
+        // Wall thickness is (cylinder_r - center_bore_r), add 50% margin for clean exit
+        let wall_thickness = cylinder_r - center_bore_r;
+        let channel_extension = wall_thickness * 1.5;
+
         Self {
             rib_diam,
             cylinder_diam,
@@ -105,6 +112,7 @@ impl CoilDerived {
             pitch: p.pitch,
             entry_angle,
             exit_angle,
+            channel_extension,
         }
     }
 }
@@ -239,8 +247,8 @@ fn compute_z_levels(d: &CoilDerived) -> Vec<f64> {
 
     // Channel boundary z-levels for clean tunnel edges
     let z_fillet = d.r_wire;
-    let entry_z_bore = d.start_z - 4.0;
-    let exit_z_bore = d.end_z + 4.0;
+    let entry_z_bore = d.start_z - d.channel_extension;
+    let exit_z_bore = d.end_z + d.channel_extension;
 
     for z in [
         bot_start,
@@ -415,7 +423,7 @@ fn channel_factor_at(d: &CoilDerived, z: f64, theta: f64) -> f64 {
         theta,
         d.entry_angle,
         d.start_z,
-        d.start_z - 4.0,
+        d.start_z - d.channel_extension,
     );
     let exit = single_channel_factor(
         d,
@@ -423,7 +431,7 @@ fn channel_factor_at(d: &CoilDerived, z: f64, theta: f64) -> f64 {
         theta,
         d.exit_angle,
         d.end_z,
-        d.end_z + 4.0,
+        d.end_z + d.channel_extension,
     );
     entry.max(exit)
 }
