@@ -23,7 +23,7 @@ pub struct CoilParams {
     /// Solid space at top & bottom for friction ribs in mm.
     pub rib_clearance: f64,
     /// Centre bore diameter in mm.  Pass 0 (or negative) for automatic
-    /// sizing (wire_diam + 0.2).
+    /// sizing (wire_diam + 0.2mm clearance).
     pub center_bore_diam: f64,
 }
 
@@ -91,10 +91,10 @@ impl CoilDerived {
         let entry_angle = 0.0;
         let exit_angle = ((-2.0 * PI * calc_turns) % (2.0 * PI) + 2.0 * PI) % (2.0 * PI);
 
-        // Channel extension: extends from groove surface to the center of the bore
-        // This is the wall thickness (cylinder_r - center_bore_r) plus half the bore diameter
-        let wall_thickness = cylinder_r - center_bore_r;
-        let channel_extension = wall_thickness + center_bore_r;
+        // Channel extension: axial distance the wire slot extends beyond the
+        // winding zone.  Half the bore diameter gives a proportional opening
+        // that won't cut through ribs or end caps.
+        let channel_extension = center_bore_r;
 
         Self {
             rib_diam,
@@ -447,7 +447,11 @@ fn radius_at(d: &CoilDerived, z: f64, theta: f64) -> f64 {
 
     let channel = channel_factor_at(d, z, theta);
     if channel > 0.0 {
-        lerp(r_grooved, d.center_bore_r, channel).max(d.center_bore_r)
+        // Wire channels connect the bore to the groove surface, allowing wire
+        // to enter/exit the helical winding. The groove is removed in the
+        // channel region (base_r instead of r_grooved) to create a flat
+        // landing for the wire to transition from bore to groove.
+        lerp(base_r, d.center_bore_r, channel).max(d.center_bore_r)
     } else {
         r_grooved.max(d.center_bore_r + 0.1)
     }
