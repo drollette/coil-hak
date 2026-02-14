@@ -320,140 +320,282 @@ fn rib_radius_at(d: &CoilDerived, z: f64) -> f64 {
     cyl_r
 }
 
-/// V-groove depth at a surface point `(z, theta)`.
-fn groove_depth_at(d: &CoilDerived, z: f64, theta: f64) -> f64 {
-    if z < d.start_z || z > d.end_z {
-        return 0.0;
-    }
 
-    let q = (z - d.start_z) / d.pitch + theta / (2.0 * PI);
-    let z_mod = q.rem_euclid(1.0);
-    let dz_frac = if z_mod <= 0.5 { z_mod } else { 1.0 - z_mod };
-    let dz = dz_frac * d.pitch;
+// ─── Continuous wire path geometry ────────────────────────────────
 
-    let circ = 2.0 * PI * d.cylinder_r;
-    let cos_alpha = circ / (circ * circ + d.pitch * d.pitch).sqrt();
-    let d_perp = dz * cos_alpha;
-
-    if d_perp < d.v_depth {
-        d.v_depth - d_perp
-    } else {
-        0.0
-    }
+/// A point along the continuous wire path with position and orientation.
+#[derive(Debug, Clone, Copy)]
+struct PathPoint {
+    /// Position in 3D space (x, y, z)
+    position: [f64; 3],
+    /// Unit tangent vector (direction of wire travel)
+    tangent: [f64; 3],
+    /// Distance parameter along path (0 = entry, total_path_length = exit)
+    #[allow(dead_code)]
+    distance: f64,
 }
 
-// ─── Wire entry/exit channels ─────────────────────────────────────
 
-/// Shortest angular distance on a circle, result in [0, π].
-fn angle_distance(a: f64, b: f64) -> f64 {
-    let mut d = (a - b) % (2.0 * PI);
-    if d > PI {
-        d -= 2.0 * PI;
-    }
-    if d < -PI {
-        d += 2.0 * PI;
-    }
-    d.abs()
-}
-
-/// Cubic smooth-step interpolation for clean edge transitions.
-fn smooth_step(t: f64) -> f64 {
+/// Cubic Bézier curve for smooth wire path transitions.
+/// Creates a 90° elbow from vertical bore to horizontal groove surface.
+fn cubic_bezier(p0: [f64; 3], p1: [f64; 3], p2: [f64; 3], p3: [f64; 3], t: f64) -> [f64; 3] {
     let t = t.clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
+    let s = 1.0 - t;
+    let s2 = s * s;
+    let s3 = s2 * s;
+    let t2 = t * t;
+    let t3 = t2 * t;
+
+    [
+        s3 * p0[0] + 3.0 * s2 * t * p1[0] + 3.0 * s * t2 * p2[0] + t3 * p3[0],
+        s3 * p0[1] + 3.0 * s2 * t * p1[1] + 3.0 * s * t2 * p2[1] + t3 * p3[1],
+        s3 * p0[2] + 3.0 * s2 * t * p1[2] + 3.0 * s * t2 * p2[2] + t3 * p3[2],
+    ]
 }
 
-/// Channel blend factor for a single wire entry or exit channel.
-///
-/// Creates a clean rectangular channel through the former wall with
-/// smooth filleted edges, connecting the groove surface to the center
-/// bore.  The channel has uniform angular width (sized for the wire)
-/// and well-defined z boundaries, producing a slot-like opening rather
-/// than the conical dimple of the previous point-distance approach.
-fn single_channel_factor(
-    d: &CoilDerived,
-    z: f64,
-    theta: f64,
-    channel_angle: f64,
-    z_groove: f64,
-    z_bore: f64,
-) -> f64 {
-    // Angular half-width: sized for wire to pass through with clearance
-    let half_angle = (d.r_wire * 1.2) / d.cylinder_r;
-    let fillet_angle = half_angle * 0.5;
+/// Tangent (derivative) of cubic Bézier curve.
+fn cubic_bezier_tangent(p0: [f64; 3], p1: [f64; 3], p2: [f64; 3], p3: [f64; 3], t: f64) -> [f64; 3] {
+    let t = t.clamp(0.0, 1.0);
+    let s = 1.0 - t;
 
-    // Fillet extent in the z direction
-    let z_fillet = d.r_wire;
+    let dx = 3.0 * s * s * (p1[0] - p0[0])
+        + 6.0 * s * t * (p2[0] - p1[0])
+        + 3.0 * t * t * (p3[0] - p2[0]);
+    let dy = 3.0 * s * s * (p1[1] - p0[1])
+        + 6.0 * s * t * (p2[1] - p1[1])
+        + 3.0 * t * t * (p3[1] - p2[1]);
+    let dz = 3.0 * s * s * (p1[2] - p0[2])
+        + 6.0 * s * t * (p2[2] - p1[2])
+        + 3.0 * t * t * (p3[2] - p2[2]);
 
-    // 1. Angular proximity to channel center
-    let da = angle_distance(theta, channel_angle);
-    let angle_f = if da <= half_angle {
-        1.0
-    } else if da <= half_angle + fillet_angle {
-        smooth_step(1.0 - (da - half_angle) / fillet_angle)
+    normalize([dx, dy, dz])
+}
+
+/// Normalize a 3D vector to unit length.
+fn normalize(v: [f64; 3]) -> [f64; 3] {
+    let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+    if len < 1e-12 {
+        [0.0, 0.0, 1.0]
     } else {
-        return 0.0; // Outside channel angular range
-    };
-
-    // 2. Z proximity to channel body
-    let z_min = z_groove.min(z_bore);
-    let z_max = z_groove.max(z_bore);
-
-    let z_f = if z >= z_min && z <= z_max {
-        1.0
-    } else if z < z_min && z >= z_min - z_fillet {
-        smooth_step(1.0 - (z_min - z) / z_fillet)
-    } else if z > z_max && z <= z_max + z_fillet {
-        smooth_step(1.0 - (z - z_max) / z_fillet)
-    } else {
-        return 0.0; // Outside channel z range
-    };
-
-    angle_f * z_f
+        [v[0] / len, v[1] / len, v[2] / len]
+    }
 }
 
-/// Blend factor for wire entry/exit channels.
+
+/// Dot product of two 3D vectors.
+fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+/// Generate the complete continuous wire path from entry to exit.
 ///
-/// Returns 0.0 outside channels, up to 1.0 inside.  When > 0, the
-/// outer radius is blended toward the bore radius to create a clean
-/// slot through the wall.
-fn channel_factor_at(d: &CoilDerived, z: f64, theta: f64) -> f64 {
-    let entry = single_channel_factor(
-        d,
-        z,
-        theta,
-        d.entry_angle,
-        d.start_z,
-        d.start_z - d.channel_extension,
-    );
-    let exit = single_channel_factor(
-        d,
-        z,
-        theta,
-        d.exit_angle,
-        d.end_z,
-        d.end_z + d.channel_extension,
-    );
-    entry.max(exit)
+/// The path consists of 5 segments:
+/// 1. Vertical rise through bore (bottom to entry transition start)
+/// 2. Bézier transition from bore to groove surface (entry elbow)
+/// 3. Helical winding along groove
+/// 4. Bézier transition from groove surface to bore (exit elbow)
+/// 5. Vertical descent through bore (exit transition end to top)
+fn generate_wire_path(d: &CoilDerived) -> Vec<PathPoint> {
+    let mut path = Vec::new();
+
+    // Transition arc length (quarter circle approximation)
+    let transition_length = PI * d.r_wire / 2.0;
+
+    // Helical path length
+    let circ = 2.0 * PI * d.cylinder_r;
+    let helix_length = (circ * circ + d.pitch * d.pitch).sqrt() * d.calc_turns;
+
+    // ──── SEGMENT 1: Vertical rise in bore (entry) ────
+    let entry_bore_start_z = d.start_z - d.channel_extension;
+    let entry_transition_start_z = d.start_z - transition_length;
+
+    let n_bore_entry = (((entry_transition_start_z - entry_bore_start_z) / 0.5).ceil() as usize).max(1);
+    for i in 0..=n_bore_entry {
+        let t = i as f64 / n_bore_entry as f64;
+        let z = entry_bore_start_z + t * (entry_transition_start_z - entry_bore_start_z);
+        path.push(PathPoint {
+            position: [0.0, 0.0, z],
+            tangent: [0.0, 0.0, 1.0],
+            distance: t * (entry_transition_start_z - entry_bore_start_z),
+        });
+    }
+
+    let dist_so_far = entry_transition_start_z - entry_bore_start_z;
+
+    // ──── SEGMENT 2: Bézier transition (bore → groove entry) ────
+    // Entry point: bore at z = start_z - transition_length
+    // Exit point: groove surface at (cylinder_r, 0, start_z)
+    let p0 = [0.0, 0.0, entry_transition_start_z];
+    let p3 = [d.cylinder_r * d.entry_angle.cos(), d.cylinder_r * d.entry_angle.sin(), d.start_z];
+
+    // Control points for smooth 90° elbow
+    let p1 = [0.0, 0.0, d.start_z]; // Vertical rise continues
+    let p2 = [d.cylinder_r * d.entry_angle.cos(), d.cylinder_r * d.entry_angle.sin(), d.start_z]; // Radial exit
+
+    let n_transition = ((transition_length / 0.5).ceil() as usize).max(1);
+    for i in 1..=n_transition {
+        let t = i as f64 / n_transition as f64;
+        let pos = cubic_bezier(p0, p1, p2, p3, t);
+        let tan = cubic_bezier_tangent(p0, p1, p2, p3, t);
+        path.push(PathPoint {
+            position: pos,
+            tangent: tan,
+            distance: dist_so_far + t * transition_length,
+        });
+    }
+
+    let dist_so_far = dist_so_far + transition_length;
+
+    // ──── SEGMENT 3: Helical winding ────
+    let n_helix = ((helix_length / 0.5).ceil() as usize).max(1);
+    for i in 1..=n_helix {
+        let t = i as f64 / n_helix as f64;
+        let z = d.start_z + t * d.winding_height;
+        let theta = d.entry_angle - 2.0 * PI * d.calc_turns * t;
+
+        let x = d.cylinder_r * theta.cos();
+        let y = d.cylinder_r * theta.sin();
+
+        // Tangent to helix: blend of radial and axial components
+        let dtheta = -2.0 * PI * d.calc_turns / n_helix as f64;
+        let dx = -d.cylinder_r * theta.sin() * dtheta;
+        let dy = d.cylinder_r * theta.cos() * dtheta;
+        let dz = d.winding_height / n_helix as f64;
+
+        path.push(PathPoint {
+            position: [x, y, z],
+            tangent: normalize([dx, dy, dz]),
+            distance: dist_so_far + t * helix_length,
+        });
+    }
+
+    let dist_so_far = dist_so_far + helix_length;
+
+    // ──── SEGMENT 4: Bézier transition (groove exit → bore) ────
+    let exit_transition_end_z = d.end_z + transition_length;
+
+    let p0_exit = [d.cylinder_r * d.exit_angle.cos(), d.cylinder_r * d.exit_angle.sin(), d.end_z];
+    let p3_exit = [0.0, 0.0, exit_transition_end_z];
+
+    let p1_exit = [d.cylinder_r * d.exit_angle.cos(), d.cylinder_r * d.exit_angle.sin(), d.end_z];
+    let p2_exit = [0.0, 0.0, d.end_z];
+
+    for i in 1..=n_transition {
+        let t = i as f64 / n_transition as f64;
+        let pos = cubic_bezier(p0_exit, p1_exit, p2_exit, p3_exit, t);
+        let tan = cubic_bezier_tangent(p0_exit, p1_exit, p2_exit, p3_exit, t);
+        path.push(PathPoint {
+            position: pos,
+            tangent: tan,
+            distance: dist_so_far + t * transition_length,
+        });
+    }
+
+    let dist_so_far = dist_so_far + transition_length;
+
+    // ──── SEGMENT 5: Vertical descent in bore (exit) ────
+    let exit_bore_end_z = d.end_z + d.channel_extension;
+
+    let n_bore_exit = (((exit_bore_end_z - exit_transition_end_z) / 0.5).ceil() as usize).max(1);
+    for i in 1..=n_bore_exit {
+        let t = i as f64 / n_bore_exit as f64;
+        let z = exit_transition_end_z + t * (exit_bore_end_z - exit_transition_end_z);
+        path.push(PathPoint {
+            position: [0.0, 0.0, z],
+            tangent: [0.0, 0.0, 1.0],
+            distance: dist_so_far + t * (exit_bore_end_z - exit_transition_end_z),
+        });
+    }
+
+    path
 }
+
+/// Calculate signed distance from a point to the continuous wire path.
+///
+/// Returns negative if inside the wire volume, positive if outside.
+/// Uses swept-sphere approach with slight overlap (1.05×) to ensure manifold geometry.
+fn distance_to_wire_path(d: &CoilDerived, path: &[PathPoint], point: [f64; 3]) -> f64 {
+    let wire_r = d.r_wire * 1.05; // 5% overlap margin for clean boolean
+
+    let mut min_dist = f64::INFINITY;
+
+    for window in path.windows(2) {
+        let p0 = window[0].position;
+        let p1 = window[1].position;
+
+        // Vector from p0 to p1
+        let edge = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
+        let edge_len_sq = edge[0] * edge[0] + edge[1] * edge[1] + edge[2] * edge[2];
+
+        if edge_len_sq < 1e-12 {
+            continue;
+        }
+
+        // Vector from p0 to point
+        let to_point = [point[0] - p0[0], point[1] - p0[1], point[2] - p0[2]];
+
+        // Project point onto edge
+        let t = (dot(to_point, edge) / edge_len_sq).clamp(0.0, 1.0);
+
+        // Closest point on edge
+        let closest = [
+            p0[0] + t * edge[0],
+            p0[1] + t * edge[1],
+            p0[2] + t * edge[2],
+        ];
+
+        // Distance from point to closest point on edge
+        let dx = point[0] - closest[0];
+        let dy = point[1] - closest[1];
+        let dz = point[2] - closest[2];
+        let dist = (dx * dx + dy * dy + dz * dz).sqrt();
+
+        min_dist = min_dist.min(dist);
+    }
+
+    min_dist - wire_r
+}
+
 
 // ─── Combined radius ───────────────────────────────────────────────
 
-/// Combined outer radius at `(z, theta)` including rib profile, groove,
-/// and wire entry/exit channels.
-fn radius_at(d: &CoilDerived, z: f64, theta: f64) -> f64 {
+/// Combined outer radius at `(z, theta)` including rib profile and continuous
+/// wire path subtraction (groove + transitions).
+fn radius_at(d: &CoilDerived, z: f64, theta: f64, wire_path: &[PathPoint]) -> f64 {
     let base_r = rib_radius_at(d, z);
-    let groove = groove_depth_at(d, z, theta);
-    let r_grooved = base_r - groove;
 
-    let channel = channel_factor_at(d, z, theta);
-    if channel > 0.0 {
-        // Wire channels connect the bore to the groove surface, allowing wire
-        // to enter/exit the helical winding. The groove is removed in the
-        // channel region (base_r instead of r_grooved) to create a flat
-        // landing for the wire to transition from bore to groove.
-        lerp(base_r, d.center_bore_r, channel).max(d.center_bore_r)
+    // Convert cylindrical (r, theta, z) to cartesian for distance query
+    let r_test = base_r;
+    let x = r_test * theta.cos();
+    let y = r_test * theta.sin();
+    let point = [x, y, z];
+
+    // Check if point is inside the continuous wire path
+    let dist = distance_to_wire_path(d, wire_path, point);
+
+    if dist < 0.0 {
+        // Inside wire volume - carve down to bore or minimum safe distance
+        // Binary search for the radius where we exit the wire volume
+        let mut r_min = d.center_bore_r;
+        let mut r_max = base_r;
+
+        for _ in 0..10 {
+            // 10 iterations gives ~0.1% precision
+            let r_mid = (r_min + r_max) / 2.0;
+            let x_mid = r_mid * theta.cos();
+            let y_mid = r_mid * theta.sin();
+            let dist_mid = distance_to_wire_path(d, wire_path, [x_mid, y_mid, z]);
+
+            if dist_mid < 0.0 {
+                r_max = r_mid; // Still inside, reduce radius
+            } else {
+                r_min = r_mid; // Outside, increase radius
+            }
+        }
+
+        r_min.max(d.center_bore_r)
     } else {
-        r_grooved.max(d.center_bore_r + 0.1)
+        base_r.max(d.center_bore_r + 0.1)
     }
 }
 
@@ -468,13 +610,16 @@ fn build_body(d: &CoilDerived) -> TriMesh {
     let n_z = z_levels.len();
     let inner_r = d.center_bore_r;
 
+    // Generate continuous wire path once
+    let wire_path = generate_wire_path(d);
+
     let mut mesh = TriMesh::new();
 
     // ── Outer surface vertices ──
     for &z in &z_levels {
         for i in 0..n_around {
             let theta = 2.0 * PI * (i as f64) / (n_around as f64);
-            let r = radius_at(d, z, theta);
+            let r = radius_at(d, z, theta, &wire_path);
             mesh.positions.push((r * theta.cos()) as f32);
             mesh.positions.push((r * theta.sin()) as f32);
             mesh.positions.push(z as f32);
@@ -542,7 +687,91 @@ fn build_body(d: &CoilDerived) -> TriMesh {
         mesh.indices.extend_from_slice(&[o1, i1, i0]);
     }
 
+    // Smooth vertex normals at wire path transitions to prevent pinched shading
+    smooth_wire_transition_normals(&mut mesh, d, &wire_path);
+
     mesh
+}
+
+/// Smooth vertex normals near wire path transitions to eliminate pinched shading.
+///
+/// Identifies vertices near the continuous wire path and adjusts their positions
+/// slightly to create smooth normal transitions, preventing the harsh shading
+/// artifacts visible in the original renders.
+fn smooth_wire_transition_normals(mesh: &mut TriMesh, d: &CoilDerived, wire_path: &[PathPoint]) {
+    let n_verts = mesh.positions.len() / 3;
+    let transition_threshold = d.r_wire * 1.5;
+
+    // For each vertex, check if it's near a transition zone
+    for i in 0..n_verts {
+        let x = mesh.positions[i * 3] as f64;
+        let y = mesh.positions[i * 3 + 1] as f64;
+        let z = mesh.positions[i * 3 + 2] as f64;
+
+        let point = [x, y, z];
+        let dist = distance_to_wire_path(d, wire_path, point).abs();
+
+        // If vertex is close to wire path surface, apply smoothing
+        if dist < transition_threshold {
+            // Find nearest path point
+            let mut nearest_idx = 0;
+            let mut nearest_dist = f64::INFINITY;
+
+            for (idx, pp) in wire_path.iter().enumerate() {
+                let dx = x - pp.position[0];
+                let dy = y - pp.position[1];
+                let dz = z - pp.position[2];
+                let d = (dx * dx + dy * dy + dz * dz).sqrt();
+
+                if d < nearest_dist {
+                    nearest_dist = d;
+                    nearest_idx = idx;
+                }
+            }
+
+            // Blend factor: 1.0 at path surface, 0.0 at threshold
+            let blend = 1.0 - (dist / transition_threshold).min(1.0);
+
+            if blend > 0.01 {
+                let path_point = &wire_path[nearest_idx];
+
+                // Get surface normal (radial direction from path center)
+                let to_point = [
+                    x - path_point.position[0],
+                    y - path_point.position[1],
+                    z - path_point.position[2],
+                ];
+
+                // Component perpendicular to tangent
+                let tan_proj = dot(to_point, path_point.tangent);
+                let perp = [
+                    to_point[0] - tan_proj * path_point.tangent[0],
+                    to_point[1] - tan_proj * path_point.tangent[1],
+                    to_point[2] - tan_proj * path_point.tangent[2],
+                ];
+
+                let perp_norm = normalize(perp);
+                let target_r = (x * x + y * y).sqrt();
+
+                // Nudge vertex slightly along perpendicular to smooth the surface
+                let nudge = blend * 0.02; // 2% max adjustment
+
+                mesh.positions[i * 3] = (x + nudge * perp_norm[0]) as f32;
+                mesh.positions[i * 3 + 1] = (y + nudge * perp_norm[1]) as f32;
+                mesh.positions[i * 3 + 2] = (z + nudge * perp_norm[2]) as f32;
+
+                // Preserve cylindrical constraint (stay on r = target_r)
+                let new_r = ((mesh.positions[i * 3] * mesh.positions[i * 3])
+                    + (mesh.positions[i * 3 + 1] * mesh.positions[i * 3 + 1]))
+                .sqrt() as f64;
+                if new_r > 0.01 {
+                    let scale = (target_r / new_r) as f32;
+                    mesh.positions[i * 3] *= scale;
+                    mesh.positions[i * 3 + 1] *= scale;
+                }
+            }
+        }
+    }
 }
 
 // ─── STL export ────────────────────────────────────────────────────
@@ -659,19 +888,39 @@ mod tests {
     }
 
     #[test]
-    fn test_groove_depth_zero_outside_winding() {
+    fn test_wire_path_generation() {
         let p = CoilParams::default();
         let d = CoilDerived::from_params(&p);
-        assert_eq!(groove_depth_at(&d, 0.0, 0.0), 0.0);
-        assert_eq!(groove_depth_at(&d, d.total_height, 0.0), 0.0);
+        let path = generate_wire_path(&d);
+        // Path should have multiple points
+        assert!(path.len() > 100, "Path has {} points", path.len());
+        // First point should be near entry bore start
+        let entry_bore_start_z = d.start_z - d.channel_extension;
+        eprintln!("First point z: {}, expected: {}", path[0].position[2], entry_bore_start_z);
+        eprintln!("Last point z: {}, expected: {}", path[path.len() - 1].position[2], d.end_z + d.channel_extension);
+        assert!((path[0].position[2] - entry_bore_start_z).abs() < 1.0,
+                "First z={}, expected={}", path[0].position[2], entry_bore_start_z);
+        // Last point should be near exit bore end
+        let exit_bore_end_z = d.end_z + d.channel_extension;
+        assert!((path[path.len() - 1].position[2] - exit_bore_end_z).abs() < 1.0,
+                "Last z={}, expected={}", path[path.len() - 1].position[2], exit_bore_end_z);
     }
 
     #[test]
-    fn test_groove_depth_max_on_helix() {
+    fn test_distance_to_wire_path() {
         let p = CoilParams::default();
         let d = CoilDerived::from_params(&p);
-        let depth = groove_depth_at(&d, d.start_z, 0.0);
-        assert!((depth - d.v_depth).abs() < 0.01);
+        let path = generate_wire_path(&d);
+
+        // Point at bore center should be inside wire path
+        let bore_point = [0.0, 0.0, d.start_z];
+        let dist = distance_to_wire_path(&d, &path, bore_point);
+        assert!(dist < 0.0, "Bore center should be inside wire path");
+
+        // Point far from path should be outside
+        let far_point = [d.cylinder_r * 2.0, 0.0, d.total_height / 2.0];
+        let dist_far = distance_to_wire_path(&d, &path, far_point);
+        assert!(dist_far > 0.0, "Far point should be outside wire path");
     }
 
     #[test]
@@ -692,20 +941,22 @@ mod tests {
     }
 
     #[test]
-    fn test_channel_factor_at_entry() {
-        let p = CoilParams::default();
-        let d = CoilDerived::from_params(&p);
-        // Exactly at entry channel center → factor = 1.0
-        let f = channel_factor_at(&d, d.start_z, d.entry_angle);
-        assert!((f - 1.0).abs() < 1e-6);
-    }
+    fn test_bezier_curve() {
+        let p0 = [0.0, 0.0, 0.0];
+        let p1 = [0.0, 0.0, 1.0];
+        let p2 = [1.0, 0.0, 1.0];
+        let p3 = [1.0, 0.0, 0.0];
 
-    #[test]
-    fn test_channel_factor_far_away() {
-        let p = CoilParams::default();
-        let d = CoilDerived::from_params(&p);
-        // Middle of coil, opposite side → factor ≈ 0
-        let f = channel_factor_at(&d, d.total_height / 2.0, PI);
-        assert!(f < 0.01);
+        // At t=0, should be at p0
+        let start = cubic_bezier(p0, p1, p2, p3, 0.0);
+        assert!((start[0] - p0[0]).abs() < 1e-6);
+        assert!((start[1] - p0[1]).abs() < 1e-6);
+        assert!((start[2] - p0[2]).abs() < 1e-6);
+
+        // At t=1, should be at p3
+        let end = cubic_bezier(p0, p1, p2, p3, 1.0);
+        assert!((end[0] - p3[0]).abs() < 1e-6);
+        assert!((end[1] - p3[1]).abs() < 1e-6);
+        assert!((end[2] - p3[2]).abs() < 1e-6);
     }
 }
