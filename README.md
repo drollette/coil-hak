@@ -18,15 +18,19 @@ Generates a cylindrical coil former with a precision V-groove helix that guides 
 ## Quick Start (Docker)
 
 ```bash
-# Build and run
-docker build -t coil-former .
-docker run -p 8000:8000 coil-former
+# Pull from GHCR
+docker pull ghcr.io/drollette/coil-hak:latest
+docker run -p 8000:8000 ghcr.io/drollette/coil-hak:latest
 
-# Or use docker-compose
+# Or build locally
+docker build -t coil-hak .
+docker run -p 8000:8000 coil-hak
+
+# Or use docker-compose (exposes on port 8001)
 docker-compose up --build
 ```
 
-Then open http://localhost:8000
+Then open http://localhost:8000 (or http://localhost:8001 when using docker-compose)
 
 ## Parameters
 
