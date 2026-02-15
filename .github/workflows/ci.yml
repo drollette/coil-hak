@@ -1,11 +1,6 @@
 name: CI
 
 on:
-  push:
-    branches: [master, main]
-    paths-ignore:
-      - '*.md'
-      - 'LICENSE'
   pull_request:
     branches: [master, main]
     paths-ignore:
@@ -28,13 +23,13 @@ jobs:
           context: .
           push: false
           load: true
-          tags: parametric-coil-former:ci
+          tags: coil-hak:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Smoke test
         run: |
-          docker run -d --name coil-ci -p 8000:8000 parametric-coil-former:ci
+          docker run -d --name coil-ci -p 8000:8000 coil-hak:ci
           echo "Waiting for server to start..."
           for i in $(seq 1 30); do
             if curl -sf http://localhost:8000/docs > /dev/null 2>&1; then
