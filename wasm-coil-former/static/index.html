@@ -1,671 +1,884 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="canonical" href="https://coil.w7hak.com/">
-  <meta name="description" content="Parametric coil former generator for ham radio phasing lines. Design, preview in 3D, and download STL files for 3D printing.">
-  <title>W7HAK Coil Former</title>
-  <style>
-    :root {
-      --bg: #1a1a2e;
-      --panel: #16213e;
-      --accent: #0f3460;
-      --highlight: #e94560;
-      --text: #eaeaea;
-      --text-dim: #a0a0b0;
-      --input-bg: #0f3460;
-      --border: #2a2a4a;
-    }
-
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    body {
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      height: 100vh;
-      overflow: hidden;
-    }
-
-    .app {
-      display: grid;
-      grid-template-columns: 320px 1fr;
-      grid-template-rows: auto 1fr auto;
-      height: 100vh;
-    }
-
-    /* Header */
-    header {
-      grid-column: 1 / -1;
-      background: var(--panel);
-      border-bottom: 1px solid var(--border);
-      padding: 12px 24px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    header h1 {
-      font-size: 1.25rem;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-    }
-
-    header h1 span { color: var(--highlight); }
-
-    .header-right {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .version-badge {
-      font-size: 0.75rem;
-      background: var(--accent);
-      padding: 2px 10px;
-      border-radius: 12px;
-      color: var(--text-dim);
-    }
-
-    .toggle-btn {
-      display: none;
-      background: var(--accent);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 6px 14px;
-      border-radius: 6px;
-      font-size: 0.8rem;
-      cursor: pointer;
-    }
-
-    .toggle-btn:hover { background: #1a4a80; }
-
-    /* Sidebar controls */
-    .sidebar {
-      background: var(--panel);
-      border-right: 1px solid var(--border);
-      padding: 20px;
-      overflow-y: auto;
-    }
-
-    .sidebar h2 {
-      font-size: 0.85rem;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--text-dim);
-      margin-bottom: 16px;
-    }
-
-    .control-group {
-      margin-bottom: 18px;
-    }
-
-    .control-group label {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      font-size: 0.85rem;
-      margin-bottom: 6px;
-    }
-
-    .control-group label .unit {
-      color: var(--text-dim);
-      font-size: 0.75rem;
-    }
-
-    .control-group .slider-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .control-group input[type="range"] {
-      flex: 1;
-      accent-color: var(--highlight);
-    }
-
-    .control-group input[type="number"] {
-      width: 72px;
-      background: var(--input-bg);
-      border: 1px solid var(--border);
-      color: var(--highlight);
-      padding: 4px 6px;
-      border-radius: 4px;
-      font-size: 0.8rem;
-      font-variant-numeric: tabular-nums;
-      text-align: right;
-      -moz-appearance: textfield;
-    }
-
-    .control-group input[type="number"]::-webkit-inner-spin-button,
-    .control-group input[type="number"]::-webkit-outer-spin-button {
-      opacity: 1;
-    }
-
-    .control-group input[type="number"]:focus {
-      outline: 1px solid var(--highlight);
-      border-color: var(--highlight);
-    }
-
-    /* Checkbox row for bore lock */
-    .check-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 0.8rem;
-      margin-bottom: 6px;
-      color: var(--text-dim);
-    }
-
-    .check-row input[type="checkbox"] {
-      accent-color: var(--highlight);
-      width: 16px;
-      height: 16px;
-      cursor: pointer;
-    }
-
-    /* Info panel */
-    .info-panel {
-      background: var(--accent);
-      border-radius: 8px;
-      padding: 14px;
-      margin-top: 12px;
-    }
-
-    .info-panel h3 {
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-dim);
-      margin-bottom: 10px;
-    }
-
-    .info-row {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.85rem;
-      padding: 4px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-    }
-
-    .info-row:last-child { border-bottom: none; }
-    .info-row .info-val { color: var(--highlight); font-weight: 600; font-variant-numeric: tabular-nums; }
-
-    /* Buttons */
-    .btn {
-      width: 100%;
-      padding: 12px;
-      border: none;
-      border-radius: 6px;
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.15s, transform 0.1s;
-      margin-top: 10px;
-    }
-
-    .btn:active { transform: scale(0.98); }
-
-    .btn-primary {
-      background: var(--highlight);
-      color: white;
-    }
-
-    .btn-primary:hover { background: #d63851; }
-
-    .btn-secondary {
-      background: var(--accent);
-      color: var(--text);
-      border: 1px solid var(--border);
-    }
-
-    .btn-secondary:hover { background: #1a4a80; }
-
-    /* 3D viewport */
-    .viewport {
-      position: relative;
-      background: #0d0d1a;
-      overflow: hidden;
-    }
-
-    #three-canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
-
-    .viewport-hint {
-      position: absolute;
-      bottom: 12px;
-      left: 12px;
-      font-size: 0.75rem;
-      color: var(--text-dim);
-      pointer-events: none;
-    }
-
-    .loading-overlay {
-      position: absolute;
-      inset: 0;
-      background: rgba(13, 13, 26, 0.9);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      z-index: 10;
-    }
-
-    .loading-overlay.hidden { display: none; }
-
-    .spinner {
-      width: 40px;
-      height: 40px;
-      border: 3px solid var(--border);
-      border-top-color: var(--highlight);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-
-    .loading-overlay p {
-      margin-top: 12px;
-      font-size: 0.9rem;
-      color: var(--text-dim);
-    }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* Footer */
-    footer {
-      grid-column: 1 / -1;
-      background: var(--panel);
-      border-top: 1px solid var(--border);
-      padding: 8px 24px;
-      font-size: 0.75rem;
-      color: var(--text-dim);
-      display: flex;
-      justify-content: space-between;
-    }
-
-    /* Responsive: collapsible top panel */
-    @media (max-width: 768px) {
-      .app {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto auto 1fr auto;
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="canonical" href="https://coil.w7hak.com/" />
+    <meta
+      name="description"
+      content="Parametric coil former generator for ham radio phasing lines. Design, preview in 3D, and download STL/STEP files for 3D printing."
+    />
+    <title>W7HAK Coil Former</title>
+    <style>
+      :root {
+        --bg: #1a1a2e;
+        --panel: #16213e;
+        --accent: #0f3460;
+        --highlight: #e94560;
+        --text: #eaeaea;
+        --text-dim: #a0a0b0;
+        --input-bg: #0f3460;
+        --border: #2a2a4a;
       }
 
-      .toggle-btn { display: inline-block; }
-
-      .sidebar {
-        border-right: none;
-        border-bottom: 1px solid var(--border);
-        max-height: 55vh;
-        overflow-y: auto;
-        transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
       }
 
-      .sidebar.collapsed {
-        max-height: 0;
-        padding-top: 0;
-        padding-bottom: 0;
-        opacity: 0;
+      body {
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        height: 100vh;
         overflow: hidden;
+      }
+
+      .app {
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        grid-template-rows: auto 1fr auto;
+        height: 100vh;
+      }
+
+      /* Header */
+      header {
+        grid-column: 1 / -1;
+        background: var(--panel);
+        border-bottom: 1px solid var(--border);
+        padding: 12px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      header h1 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+
+      header h1 span {
+        color: var(--highlight);
+      }
+
+      .header-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .version-badge {
+        font-size: 0.75rem;
+        background: var(--accent);
+        padding: 2px 10px;
+        border-radius: 12px;
+        color: var(--text-dim);
+      }
+
+      .toggle-btn {
+        display: none;
+        background: var(--accent);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 6px 14px;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        cursor: pointer;
+      }
+
+      .toggle-btn:hover {
+        background: #1a4a80;
+      }
+
+      /* Sidebar controls */
+      .sidebar {
+        background: var(--panel);
+        border-right: 1px solid var(--border);
+        padding: 20px;
+        overflow-y: auto;
+      }
+
+      .sidebar h2 {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-dim);
+        margin-bottom: 16px;
+      }
+
+      .control-group {
+        margin-bottom: 18px;
+      }
+
+      .control-group label {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        font-size: 0.85rem;
+        margin-bottom: 6px;
+      }
+
+      .control-group label .unit {
+        color: var(--text-dim);
+        font-size: 0.75rem;
+      }
+
+      .control-group .slider-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .control-group input[type="range"] {
+        flex: 1;
+        accent-color: var(--highlight);
+      }
+
+      .control-group input[type="number"] {
+        width: 72px;
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        color: var(--highlight);
+        padding: 4px 6px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+        appearance: textfield;
+      }
+
+      .control-group input[type="number"]::-webkit-inner-spin-button,
+      .control-group input[type="number"]::-webkit-outer-spin-button {
+        opacity: 1;
+      }
+
+      .control-group input[type="number"]:focus {
+        outline: 1px solid var(--highlight);
+        border-color: var(--highlight);
+      }
+
+      /* Checkbox row */
+      .check-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.8rem;
+        margin-bottom: 6px;
+        color: var(--text-dim);
+      }
+
+      .check-row input[type="checkbox"] {
+        accent-color: var(--highlight);
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+      }
+
+      .check-row label {
+        cursor: pointer;
+      }
+
+      /* Info panel */
+      .info-panel {
+        background: var(--accent);
+        border-radius: 8px;
+        padding: 14px;
+        margin-top: 12px;
+      }
+
+      .info-panel h3 {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-dim);
+        margin-bottom: 10px;
+      }
+
+      .info-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.85rem;
+        padding: 4px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      .info-row:last-child {
         border-bottom: none;
       }
-    }
-  </style>
-</head>
-<body>
-  <div class="app">
-    <header>
-      <h1><span>W7HAK</span> Coil Former</h1>
-      <div class="header-right">
-        <span class="version-badge" id="version-badge">loading…</span>
-        <button class="toggle-btn" id="toggle-panel">Parameters</button>
-      </div>
-    </header>
-
-    <aside class="sidebar collapsed" id="sidebar">
-      <h2>Parameters</h2>
-
-      <div class="control-group">
-        <label>Wire Length <span class="unit">mm</span></label>
-        <div class="slider-row">
-          <input type="range" id="wire_len" min="50" max="2000" step="1" value="668">
-          <input type="number" id="wire_len_num" min="50" max="2000" step="1" value="668">
-        </div>
-      </div>
-
-      <div class="control-group">
-        <label>Wire Diameter <span class="unit">mm</span></label>
-        <div class="slider-row">
-          <input type="range" id="wire_diam" min="0.5" max="6.0" step="0.1" value="3.2">
-          <input type="number" id="wire_diam_num" min="0.5" max="6.0" step="0.1" value="3.2">
-        </div>
-      </div>
-
-      <div class="control-group">
-        <label>PVC Inner Diameter <span class="unit">mm</span></label>
-        <div class="slider-row">
-          <input type="range" id="pvc_inner_diam" min="10" max="80" step="0.1" value="22.3">
-          <input type="number" id="pvc_inner_diam_num" min="10" max="80" step="0.1" value="22.3">
-        </div>
-      </div>
-
-      <div class="control-group">
-        <label>Pitch <span class="unit">mm</span></label>
-        <div class="slider-row">
-          <input type="range" id="pitch" min="2.0" max="25.0" step="0.1" value="8.9">
-          <input type="number" id="pitch_num" min="2.0" max="25.0" step="0.1" value="8.9">
-        </div>
-      </div>
-
-      <div class="control-group">
-        <label>Rib Clearance <span class="unit">mm</span></label>
-        <div class="slider-row">
-          <input type="range" id="rib_clearance" min="2" max="20" step="0.5" value="8">
-          <input type="number" id="rib_clearance_num" min="2" max="20" step="0.5" value="8">
-        </div>
-      </div>
-
-      <div class="control-group">
-        <label>Center Bore Diameter <span class="unit">mm</span></label>
-        <div class="check-row">
-          <input type="checkbox" id="bore_lock" checked>
-          <label for="bore_lock">Same as wire diameter</label>
-        </div>
-        <div class="slider-row" id="bore_slider_row" style="opacity: 0.4; pointer-events: none;">
-          <input type="range" id="center_bore_diam" min="1.0" max="20.0" step="0.1" value="3.2">
-          <input type="number" id="center_bore_diam_num" min="1.0" max="20.0" step="0.1" value="3.2">
-        </div>
-      </div>
-
-      <div class="info-panel">
-        <h3>Computed Values</h3>
-        <div class="info-row"><span>Turns</span>       <span class="info-val" id="info-turns">–</span></div>
-        <div class="info-row"><span>Coil Height</span> <span class="info-val" id="info-coil-h">–</span></div>
-        <div class="info-row"><span>Total Height</span><span class="info-val" id="info-total-h">–</span></div>
-        <div class="info-row"><span>Former Diam</span> <span class="info-val" id="info-cyl-d">–</span></div>
-      </div>
-
-      <button class="btn btn-primary" id="btn-download">Download STL</button>
-      <button class="btn btn-secondary" id="btn-reset">Reset Defaults</button>
-    </aside>
-
-    <main class="viewport">
-      <canvas id="three-canvas"></canvas>
-      <div class="viewport-hint">Drag to rotate &middot; Scroll to zoom &middot; Right-drag to pan</div>
-      <div class="loading-overlay" id="loading">
-        <div class="spinner"></div>
-        <p>Loading WASM engine…</p>
-      </div>
-    </main>
-
-    <footer>
-      <span>Parametric Coil Former &middot; MIT License</span>
-      <span>Built with Rust + WebAssembly for <a href="https://w7hak.com" style="color:var(--highlight);">w7hak.com</a></span>
-    </footer>
-  </div>
-
-  <!-- Three.js from CDN -->
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
-    }
-  }
-  </script>
-
-  <script type="module">
-    import * as THREE from 'three';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-
-    // ── Toggle panel on mobile ────────────────────────────────
-    const sidebar = document.getElementById('sidebar');
-    const toggleBtn = document.getElementById('toggle-panel');
-    toggleBtn.addEventListener('click', () => {
-      sidebar.classList.toggle('collapsed');
-      toggleBtn.textContent = sidebar.classList.contains('collapsed')
-        ? 'Parameters' : 'Close';
-      // Trigger a resize so the viewport recalculates
-      setTimeout(resize, 320);
-    });
-
-    // ── WASM initialisation ──────────────────────────────────
-    import init, { generate_coil, export_stl, compute_info, version } from './wasm_coil_former.js';
-
-    let wasmReady = false;
-
-    async function boot() {
-      await init();
-      wasmReady = true;
-      document.getElementById('loading').classList.add('hidden');
-      document.getElementById('version-badge').textContent = `v${version()}`;
-      rebuildCoil();
-    }
-
-    boot().catch(err => {
-      console.error('WASM init failed:', err);
-      document.querySelector('#loading p').textContent = 'Failed to load WASM – see console.';
-    });
-
-    // ── Three.js scene ───────────────────────────────────────
-    const canvas = document.getElementById('three-canvas');
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(0x0d0d1a);
-
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
-    camera.position.set(40, 30, 50);
-
-    const controls = new OrbitControls(camera, canvas);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.08;
-
-    // Lighting
-    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-    const dir1 = new THREE.DirectionalLight(0xffffff, 0.8);
-    dir1.position.set(50, 80, 60);
-    scene.add(dir1);
-    const dir2 = new THREE.DirectionalLight(0x8888ff, 0.3);
-    dir2.position.set(-40, -20, -30);
-    scene.add(dir2);
-
-    // Grid helper
-    const grid = new THREE.GridHelper(100, 20, 0x2a2a4a, 0x1a1a2e);
-    grid.rotation.x = Math.PI / 2;
-    scene.add(grid);
-
-    let coilMesh = null;
-
-    function resize() {
-      const { clientWidth: w, clientHeight: h } = canvas.parentElement;
-      renderer.setSize(w, h);
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-    }
-
-    window.addEventListener('resize', resize);
-    resize();
-
-    function animate() {
-      requestAnimationFrame(animate);
-      controls.update();
-      renderer.render(scene, camera);
-    }
-    animate();
-
-    // ── Coil rebuild ─────────────────────────────────────────
-    function getParams() {
-      const boreLocked = document.getElementById('bore_lock').checked;
-      const wireDiam = parseFloat(document.getElementById('wire_diam').value);
-      return {
-        wire_len:         parseFloat(document.getElementById('wire_len').value),
-        wire_diam:        wireDiam,
-        pvc_inner_diam:   parseFloat(document.getElementById('pvc_inner_diam').value),
-        pitch:            parseFloat(document.getElementById('pitch').value),
-        rib_clearance:    parseFloat(document.getElementById('rib_clearance').value),
-        center_bore_diam: boreLocked ? 0 : parseFloat(document.getElementById('center_bore_diam').value),
-      };
-    }
-
-    function updateInfo(p) {
-      if (!wasmReady) return;
-      const info = JSON.parse(compute_info(
-        p.wire_len, p.wire_diam, p.pvc_inner_diam,
-        p.pitch, p.rib_clearance, p.center_bore_diam
-      ));
-      document.getElementById('info-turns').textContent  = info.turns.toFixed(2);
-      document.getElementById('info-coil-h').textContent = info.coil_height.toFixed(1) + ' mm';
-      document.getElementById('info-total-h').textContent = info.total_height.toFixed(1) + ' mm';
-      document.getElementById('info-cyl-d').textContent  = info.cylinder_diam.toFixed(1) + ' mm';
-    }
-
-    function rebuildCoil() {
-      if (!wasmReady) return;
-      const p = getParams();
-
-      const json = generate_coil(
-        p.wire_len, p.wire_diam, p.pvc_inner_diam,
-        p.pitch, p.rib_clearance, p.center_bore_diam
-      );
-      const data = JSON.parse(json);
-
-      if (data.error) {
-        console.error('Coil gen error:', data.error);
-        return;
+      .info-row .info-val {
+        color: var(--highlight);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
       }
 
-      // Update info panel
-      document.getElementById('info-turns').textContent  = data.turns.toFixed(2);
-      document.getElementById('info-coil-h').textContent = data.coil_height.toFixed(1) + ' mm';
-      document.getElementById('info-total-h').textContent = data.total_height.toFixed(1) + ' mm';
-      document.getElementById('info-cyl-d').textContent  = data.cylinder_diam.toFixed(1) + ' mm';
-
-      // Build Three.js geometry
-      if (coilMesh) {
-        scene.remove(coilMesh);
-        coilMesh.geometry.dispose();
+      /* Buttons */
+      .btn {
+        width: 100%;
+        padding: 12px;
+        border: none;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s, transform 0.1s;
+        margin-top: 10px;
       }
 
-      const geom = new THREE.BufferGeometry();
-      geom.setAttribute('position', new THREE.Float32BufferAttribute(data.positions, 3));
-      geom.setIndex(data.indices);
-      geom.computeVertexNormals();
+      .btn:active {
+        transform: scale(0.98);
+      }
 
-      const mat = new THREE.MeshPhongMaterial({
-        color: 0x4488cc,
-        specular: 0x222244,
-        shininess: 60,
-        side: THREE.DoubleSide,
-        flatShading: false,
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .btn-primary {
+        background: var(--highlight);
+        color: white;
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        background: #d63851;
+      }
+
+      .btn-secondary {
+        background: var(--accent);
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+
+      .btn-secondary:hover:not(:disabled) {
+        background: #1a4a80;
+      }
+
+      .btn-row {
+        display: flex;
+        gap: 8px;
+      }
+
+      .btn-row .btn {
+        flex: 1;
+      }
+
+      /* 3D viewport */
+      .viewport {
+        position: relative;
+        background: #0d0d1a;
+        overflow: hidden;
+      }
+
+      #three-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      .viewport-hint {
+        position: absolute;
+        bottom: 12px;
+        left: 12px;
+        font-size: 0.75rem;
+        color: var(--text-dim);
+        pointer-events: none;
+      }
+
+      .loading-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(13, 13, 26, 0.9);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+      }
+
+      .loading-overlay.hidden {
+        display: none;
+      }
+
+      .spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid var(--border);
+        border-top-color: var(--highlight);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+
+      .loading-overlay p {
+        margin-top: 12px;
+        font-size: 0.9rem;
+        color: var(--text-dim);
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* Footer */
+      footer {
+        grid-column: 1 / -1;
+        background: var(--panel);
+        border-top: 1px solid var(--border);
+        padding: 8px 24px;
+        font-size: 0.75rem;
+        color: var(--text-dim);
+        display: flex;
+        justify-content: space-between;
+      }
+
+      /* Responsive: collapsible top panel */
+      @media (max-width: 768px) {
+        .app {
+          grid-template-columns: 1fr;
+          grid-template-rows: auto auto 1fr auto;
+        }
+
+        .toggle-btn {
+          display: inline-block;
+        }
+
+        .sidebar {
+          border-right: none;
+          border-bottom: 1px solid var(--border);
+          max-height: 55vh;
+          overflow-y: auto;
+          transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
+        }
+
+        .sidebar.collapsed {
+          max-height: 0;
+          padding-top: 0;
+          padding-bottom: 0;
+          opacity: 0;
+          overflow: hidden;
+          border-bottom: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <h1><span>W7HAK</span> Coil Former</h1>
+        <div class="header-right">
+          <span class="version-badge" id="version-badge">v2.0.0</span>
+          <button class="toggle-btn" id="toggle-panel">Parameters</button>
+        </div>
+      </header>
+
+      <aside class="sidebar collapsed" id="sidebar">
+        <h2>Parameters</h2>
+
+        <div class="control-group">
+          <label>Wire Length <span class="unit">mm</span></label>
+          <div class="slider-row">
+            <input
+              type="range"
+              id="wire_len"
+              min="5"
+              max="2000"
+              step="1"
+              value="90.83"
+            />
+            <input
+              type="number"
+              id="wire_len_num"
+              min="5"
+              max="2000"
+              step="1"
+              value="90.83"
+            />
+          </div>
+        </div>
+
+        <div class="control-group">
+          <label>Wire Diameter <span class="unit">mm</span></label>
+          <div class="slider-row">
+            <input
+              type="range"
+              id="wire_diam"
+              min="0.5"
+              max="6.0"
+              step="0.1"
+              value="3.5"
+            />
+            <input
+              type="number"
+              id="wire_diam_num"
+              min="0.5"
+              max="6.0"
+              step="0.1"
+              value="3.5"
+            />
+          </div>
+        </div>
+
+        <div class="control-group">
+          <label>PVC Inner Diameter <span class="unit">mm</span></label>
+          <div class="slider-row">
+            <input
+              type="range"
+              id="pvc_id"
+              min="10"
+              max="80"
+              step="0.1"
+              value="23.5"
+            />
+            <input
+              type="number"
+              id="pvc_id_num"
+              min="10"
+              max="80"
+              step="0.1"
+              value="23.5"
+            />
+          </div>
+        </div>
+
+        <div class="control-group">
+          <label>Coil Diameter <span class="unit">mm</span></label>
+          <div class="slider-row">
+            <input
+              type="range"
+              id="coil_diameter"
+              min="5"
+              max="60"
+              step="0.5"
+              value="15"
+            />
+            <input
+              type="number"
+              id="coil_diameter_num"
+              min="5"
+              max="60"
+              step="0.5"
+              value="15"
+            />
+          </div>
+        </div>
+
+        <div class="control-group">
+          <label>Pitch <span class="unit">mm</span></label>
+          <div class="slider-row">
+            <input
+              type="range"
+              id="pitch"
+              min="2.0"
+              max="25.0"
+              step="0.1"
+              value="10"
+            />
+            <input
+              type="number"
+              id="pitch_num"
+              min="2.0"
+              max="25.0"
+              step="0.1"
+              value="10"
+            />
+          </div>
+        </div>
+
+        <div class="control-group">
+          <label>End Buffer <span class="unit">mm</span></label>
+          <div class="slider-row">
+            <input
+              type="range"
+              id="end_buffer"
+              min="2"
+              max="30"
+              step="0.5"
+              value="10"
+            />
+            <input
+              type="number"
+              id="end_buffer_num"
+              min="2"
+              max="30"
+              step="0.5"
+              value="10"
+            />
+          </div>
+        </div>
+
+        <div class="control-group">
+          <label>Chamfer Size <span class="unit">mm</span></label>
+          <div class="slider-row">
+            <input
+              type="range"
+              id="chamfer_size"
+              min="0"
+              max="3"
+              step="0.1"
+              value="0.5"
+            />
+            <input
+              type="number"
+              id="chamfer_size_num"
+              min="0"
+              max="3"
+              step="0.1"
+              value="0.5"
+            />
+          </div>
+        </div>
+
+        <div class="control-group">
+          <div class="check-row">
+            <input type="checkbox" id="enable_ribs" checked />
+            <label for="enable_ribs">Enable friction ribs</label>
+          </div>
+        </div>
+
+        <div class="info-panel">
+          <h3>Computed Values</h3>
+          <div class="info-row">
+            <span>Turns</span> <span class="info-val" id="info-turns">-</span>
+          </div>
+          <div class="info-row">
+            <span>Winding Height</span>
+            <span class="info-val" id="info-winding-h">-</span>
+          </div>
+          <div class="info-row">
+            <span>Total Height</span
+            ><span class="info-val" id="info-total-h">-</span>
+          </div>
+          <div class="info-row">
+            <span>Coil Diameter</span>
+            <span class="info-val" id="info-coil-d">-</span>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btn-download-stl" disabled>
+            Download STL
+          </button>
+          <button class="btn btn-primary" id="btn-download-step" disabled>
+            Download STEP
+          </button>
+        </div>
+        <button class="btn btn-secondary" id="btn-reset">Reset Defaults</button>
+      </aside>
+
+      <main class="viewport">
+        <canvas id="three-canvas"></canvas>
+        <div class="viewport-hint">
+          Drag to rotate &middot; Scroll to zoom &middot; Right-drag to pan
+        </div>
+        <div class="loading-overlay" id="loading">
+          <div class="spinner"></div>
+          <p id="loading-text">Generating geometry...</p>
+        </div>
+      </main>
+
+      <footer>
+        <span>Parametric Coil Former &middot; MIT License</span>
+        <span
+          >Built with Python + CadQuery for
+          <a href="https://w7hak.com" style="color: var(--highlight)"
+            >w7hak.com</a
+          ></span
+        >
+      </footer>
+    </div>
+
+    <!-- Three.js from CDN -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+        }
+      }
+    </script>
+
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+      import { STLLoader } from "three/addons/loaders/STLLoader.js";
+
+      // API URL (same origin for self-hosted)
+      const API_URL = "";
+
+      // Current job data
+      let currentJob = null;
+
+      // Toggle panel on mobile
+      const sidebar = document.getElementById("sidebar");
+      const toggleBtn = document.getElementById("toggle-panel");
+      toggleBtn.addEventListener("click", () => {
+        sidebar.classList.toggle("collapsed");
+        toggleBtn.textContent = sidebar.classList.contains("collapsed")
+          ? "Parameters"
+          : "Close";
+        setTimeout(resize, 320);
       });
 
-      coilMesh = new THREE.Mesh(geom, mat);
-      coilMesh.position.y = 0;
-      scene.add(coilMesh);
-    }
+      // Three.js scene setup
+      const canvas = document.getElementById("three-canvas");
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setClearColor(0x0d0d1a);
 
-    // ── Slider + number input wiring ─────────────────────────
-    const paramIds = ['wire_len', 'wire_diam', 'pvc_inner_diam', 'pitch', 'rib_clearance', 'center_bore_diam'];
-    let rebuildTimeout = null;
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+      camera.position.set(40, 30, 50);
 
-    function onParamChange() {
-      updateInfo(getParams());
-      clearTimeout(rebuildTimeout);
-      rebuildTimeout = setTimeout(rebuildCoil, 150);
-    }
+      const controls = new OrbitControls(camera, canvas);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
 
-    paramIds.forEach(id => {
-      const slider = document.getElementById(id);
-      const numInput = document.getElementById(id + '_num');
+      // Lighting
+      scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+      const dir1 = new THREE.DirectionalLight(0xffffff, 0.8);
+      dir1.position.set(50, 80, 60);
+      scene.add(dir1);
+      const dir2 = new THREE.DirectionalLight(0x8888ff, 0.3);
+      dir2.position.set(-40, -20, -30);
+      scene.add(dir2);
 
-      // Slider → number input sync
-      slider.addEventListener('input', () => {
-        numInput.value = slider.value;
-        onParamChange();
-      });
+      // Grid helper
+      const grid = new THREE.GridHelper(100, 20, 0x2a2a4a, 0x1a1a2e);
+      grid.rotation.x = Math.PI / 2;
+      scene.add(grid);
 
-      // Number input → slider sync
-      numInput.addEventListener('input', () => {
-        const v = parseFloat(numInput.value);
-        if (!isNaN(v)) {
-          slider.value = v;
+      let coilMesh = null;
+      const stlLoader = new STLLoader();
+
+      function resize() {
+        const { clientWidth: w, clientHeight: h } = canvas.parentElement;
+        renderer.setSize(w, h);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+      }
+
+      window.addEventListener("resize", resize);
+      resize();
+
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      // Get current parameters
+      function getParams() {
+        return {
+          wire_len: parseFloat(document.getElementById("wire_len").value),
+          wire_diam: parseFloat(document.getElementById("wire_diam").value),
+          pvc_id: parseFloat(document.getElementById("pvc_id").value),
+          coil_diameter: parseFloat(
+            document.getElementById("coil_diameter").value
+          ),
+          pitch: parseFloat(document.getElementById("pitch").value),
+          end_buffer: parseFloat(document.getElementById("end_buffer").value),
+          chamfer_size: parseFloat(
+            document.getElementById("chamfer_size").value
+          ),
+          enable_ribs: document.getElementById("enable_ribs").checked,
+          tunnel_tol: 0.2,
+        };
+      }
+
+      // Show/hide loading overlay
+      function setLoading(isLoading, message = "Generating geometry...") {
+        const overlay = document.getElementById("loading");
+        const text = document.getElementById("loading-text");
+        text.textContent = message;
+        if (isLoading) {
+          overlay.classList.remove("hidden");
+        } else {
+          overlay.classList.add("hidden");
+        }
+      }
+
+      // Enable/disable download buttons
+      function setDownloadEnabled(enabled) {
+        document.getElementById("btn-download-stl").disabled = !enabled;
+        document.getElementById("btn-download-step").disabled = !enabled;
+      }
+
+      // Update info panel from API response
+      function updateInfo(computed) {
+        document.getElementById("info-turns").textContent =
+          computed.turns.toFixed(2);
+        document.getElementById("info-winding-h").textContent =
+          computed.winding_height.toFixed(1) + " mm";
+        document.getElementById("info-total-h").textContent =
+          computed.total_height.toFixed(1) + " mm";
+        document.getElementById("info-coil-d").textContent =
+          computed.coil_diameter.toFixed(1) + " mm";
+      }
+
+      // Load STL into Three.js scene
+      function loadSTLPreview(stlUrl) {
+        stlLoader.load(
+          API_URL + stlUrl,
+          (geometry) => {
+            // Remove existing mesh
+            if (coilMesh) {
+              scene.remove(coilMesh);
+              coilMesh.geometry.dispose();
+            }
+
+            // Center geometry
+            geometry.computeBoundingBox();
+            const center = new THREE.Vector3();
+            geometry.boundingBox.getCenter(center);
+            geometry.translate(-center.x, -center.y, -center.z);
+
+            geometry.computeVertexNormals();
+
+            const mat = new THREE.MeshPhongMaterial({
+              color: 0x4488cc,
+              specular: 0x222244,
+              shininess: 60,
+              side: THREE.DoubleSide,
+              flatShading: false,
+            });
+
+            coilMesh = new THREE.Mesh(geometry, mat);
+            scene.add(coilMesh);
+          },
+          undefined,
+          (error) => {
+            console.error("Error loading STL:", error);
+          }
+        );
+      }
+
+      // Generate coil via API
+      async function generateCoil() {
+        const params = getParams();
+        setLoading(true);
+        setDownloadEnabled(false);
+
+        try {
+          const response = await fetch(API_URL + "/generate", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(params),
+          });
+
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+          }
+
+          const data = await response.json();
+          currentJob = data;
+
+          // Update info panel
+          updateInfo(data.computed);
+
+          // Load STL preview
+          loadSTLPreview(data.stl_url);
+
+          // Enable downloads
+          setDownloadEnabled(true);
+        } catch (error) {
+          console.error("Generation failed:", error);
+          document.getElementById("loading-text").textContent =
+            "Generation failed - see console";
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      // Slider + number input wiring
+      const paramIds = [
+        "wire_len",
+        "wire_diam",
+        "pvc_id",
+        "coil_diameter",
+        "pitch",
+        "end_buffer",
+        "chamfer_size",
+      ];
+      let rebuildTimeout = null;
+
+      function onParamChange() {
+        clearTimeout(rebuildTimeout);
+        rebuildTimeout = setTimeout(generateCoil, 500);
+      }
+
+      paramIds.forEach((id) => {
+        const slider = document.getElementById(id);
+        const numInput = document.getElementById(id + "_num");
+
+        slider.addEventListener("input", () => {
+          numInput.value = slider.value;
           onParamChange();
-        }
+        });
+
+        numInput.addEventListener("input", () => {
+          const v = parseFloat(numInput.value);
+          if (!isNaN(v)) {
+            slider.value = v;
+            onParamChange();
+          }
+        });
       });
-    });
 
-    // ── Center bore checkbox logic ───────────────────────────
-    const boreLockEl = document.getElementById('bore_lock');
-    const boreRow = document.getElementById('bore_slider_row');
-    const boreSlider = document.getElementById('center_bore_diam');
-    const boreNum = document.getElementById('center_bore_diam_num');
+      // Checkbox triggers rebuild
+      document
+        .getElementById("enable_ribs")
+        .addEventListener("change", onParamChange);
 
-    function syncBoreLock() {
-      const locked = boreLockEl.checked;
-      boreRow.style.opacity = locked ? '0.4' : '1';
-      boreRow.style.pointerEvents = locked ? 'none' : 'auto';
-      if (locked) {
-        const wd = parseFloat(document.getElementById('wire_diam').value);
-        boreSlider.value = wd;
-        boreNum.value = wd;
-      }
-      onParamChange();
-    }
+      // Download buttons
+      document
+        .getElementById("btn-download-stl")
+        .addEventListener("click", () => {
+          if (currentJob && currentJob.stl_url) {
+            const a = document.createElement("a");
+            a.href = API_URL + currentJob.stl_url;
+            a.download = `coil_former_${getParams().wire_len}mm.stl`;
+            a.click();
+          }
+        });
 
-    boreLockEl.addEventListener('change', syncBoreLock);
+      document
+        .getElementById("btn-download-step")
+        .addEventListener("click", () => {
+          if (currentJob && currentJob.step_url) {
+            const a = document.createElement("a");
+            a.href = API_URL + currentJob.step_url;
+            a.download = `coil_former_${getParams().wire_len}mm.step`;
+            a.click();
+          }
+        });
 
-    // Keep bore in sync when wire diameter changes and bore is locked
-    document.getElementById('wire_diam').addEventListener('input', () => {
-      if (boreLockEl.checked) {
-        const wd = parseFloat(document.getElementById('wire_diam').value);
-        boreSlider.value = wd;
-        boreNum.value = wd;
-      }
-    });
-    document.getElementById('wire_diam_num').addEventListener('input', () => {
-      if (boreLockEl.checked) {
-        const wd = parseFloat(document.getElementById('wire_diam_num').value);
-        if (!isNaN(wd)) {
-          boreSlider.value = wd;
-          boreNum.value = wd;
-        }
-      }
-    });
+      // Reset defaults
+      const defaults = {
+        wire_len: 90.83,
+        wire_diam: 3.5,
+        pvc_id: 23.5,
+        coil_diameter: 15,
+        pitch: 10,
+        end_buffer: 10,
+        chamfer_size: 0.5,
+      };
 
-    // ── STL download ─────────────────────────────────────────
-    document.getElementById('btn-download').addEventListener('click', () => {
-      if (!wasmReady) return;
-      const p = getParams();
-      const stlBytes = export_stl(
-        p.wire_len, p.wire_diam, p.pvc_inner_diam,
-        p.pitch, p.rib_clearance, p.center_bore_diam
-      );
-      const blob = new Blob([stlBytes], { type: 'application/octet-stream' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `coil_former_${p.wire_len}mm.stl`;
-      a.click();
-      URL.revokeObjectURL(url);
-    });
-
-    // ── Reset defaults ───────────────────────────────────────
-    const defaults = {
-      wire_len: 668, wire_diam: 3.2, pvc_inner_diam: 22.3,
-      pitch: 8.9, rib_clearance: 8, center_bore_diam: 3.2
-    };
-    document.getElementById('btn-reset').addEventListener('click', () => {
-      Object.entries(defaults).forEach(([id, val]) => {
-        document.getElementById(id).value = val;
-        document.getElementById(id + '_num').value = val;
+      document.getElementById("btn-reset").addEventListener("click", () => {
+        Object.entries(defaults).forEach(([id, val]) => {
+          document.getElementById(id).value = val;
+          document.getElementById(id + "_num").value = val;
+        });
+        document.getElementById("enable_ribs").checked = true;
+        generateCoil();
       });
-      boreLockEl.checked = true;
-      syncBoreLock();
-      rebuildCoil();
-    });
-  </script>
-</body>
+
+      // Initial generation on page load
+      generateCoil();
+    </script>
+  </body>
 </html>
