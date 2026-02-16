@@ -72,6 +72,7 @@ async def generate_coil(
         enable_ribs=request.enable_ribs,
         chamfer_size=request.chamfer_size,
         tunnel_tol=request.tunnel_tol,
+        center_bore_diam=request.center_bore_diam,
     )
 
     # Export files

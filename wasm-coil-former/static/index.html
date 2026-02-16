@@ -531,6 +531,56 @@
         </div>
 
         <div class="control-group">
+          <label>Tunnel Tolerance <span class="unit">mm</span></label>
+          <div class="slider-row">
+            <input
+              type="range"
+              id="tunnel_tol"
+              min="0"
+              max="1"
+              step="0.05"
+              value="0.2"
+            />
+            <input
+              type="number"
+              id="tunnel_tol_num"
+              min="0"
+              max="1"
+              step="0.05"
+              value="0.2"
+            />
+          </div>
+        </div>
+
+        <div class="control-group">
+          <div class="check-row">
+            <input type="checkbox" id="center_bore_bind" checked />
+            <label for="center_bore_bind">Bind to wire + tolerance</label>
+          </div>
+          <label>Center Bore Diameter <span class="unit">mm</span></label>
+          <div class="slider-row">
+            <input
+              type="range"
+              id="center_bore_diam"
+              min="0.5"
+              max="200"
+              step="0.1"
+              value="2.2"
+              disabled
+            />
+            <input
+              type="number"
+              id="center_bore_diam_num"
+              min="0.5"
+              max="200"
+              step="0.1"
+              value="2.2"
+              disabled
+            />
+          </div>
+        </div>
+
+        <div class="control-group">
           <div class="check-row">
             <input type="checkbox" id="enable_ribs" checked />
             <label for="enable_ribs">Enable friction ribs</label>
@@ -666,6 +716,7 @@
 
       // Get current parameters
       function getParams() {
+        const bound = document.getElementById("center_bore_bind").checked;
         return {
           wire_len: parseFloat(document.getElementById("wire_len").value),
           wire_diam: parseFloat(document.getElementById("wire_diam").value),
@@ -679,7 +730,10 @@
             document.getElementById("chamfer_size").value
           ),
           enable_ribs: document.getElementById("enable_ribs").checked,
-          tunnel_tol: 0.2,
+          tunnel_tol: parseFloat(document.getElementById("tunnel_tol").value),
+          center_bore_diam: bound
+            ? null
+            : parseFloat(document.getElementById("center_bore_diam").value),
         };
       }
 
@@ -798,6 +852,8 @@
         "pitch",
         "end_buffer",
         "chamfer_size",
+        "tunnel_tol",
+        "center_bore_diam",
       ];
       let rebuildTimeout = null;
 
@@ -806,12 +862,42 @@
         rebuildTimeout = setTimeout(generateCoil, 500);
       }
 
+      // Cap center bore slider max to the effective coil diameter
+      function updateBoreMax() {
+        const cd = parseFloat(document.getElementById("coil_diameter").value);
+        const pvc = parseFloat(document.getElementById("pvc_id").value);
+        const wd = parseFloat(document.getElementById("wire_diam").value);
+        const maxBore = Math.min(cd, pvc - wd);
+        const slider = document.getElementById("center_bore_diam");
+        const numInput = document.getElementById("center_bore_diam_num");
+        slider.max = maxBore;
+        numInput.max = maxBore;
+        // Clamp current value if it exceeds the new max
+        if (parseFloat(slider.value) > maxBore) {
+          slider.value = maxBore;
+          numInput.value = maxBore;
+        }
+      }
+
+      // Update bound center bore value from wire_diam + tunnel_tol
+      function updateBoundBore() {
+        if (!document.getElementById("center_bore_bind").checked) return;
+        const wd = parseFloat(document.getElementById("wire_diam").value);
+        const tt = parseFloat(document.getElementById("tunnel_tol").value);
+        const val = Math.round((wd + tt) * 10) / 10;
+        document.getElementById("center_bore_diam").value = val;
+        document.getElementById("center_bore_diam_num").value = val;
+      }
+
       paramIds.forEach((id) => {
         const slider = document.getElementById(id);
         const numInput = document.getElementById(id + "_num");
 
         slider.addEventListener("input", () => {
           numInput.value = slider.value;
+          if (id === "wire_diam" || id === "tunnel_tol") updateBoundBore();
+          if (id === "coil_diameter" || id === "pvc_id" || id === "wire_diam")
+            updateBoreMax();
           onParamChange();
         });
 
@@ -819,10 +905,24 @@
           const v = parseFloat(numInput.value);
           if (!isNaN(v)) {
             slider.value = v;
+            if (id === "wire_diam" || id === "tunnel_tol") updateBoundBore();
+            if (id === "coil_diameter" || id === "pvc_id" || id === "wire_diam")
+              updateBoreMax();
             onParamChange();
           }
         });
       });
+
+      // Center bore bind checkbox
+      document
+        .getElementById("center_bore_bind")
+        .addEventListener("change", (e) => {
+          const bound = e.target.checked;
+          document.getElementById("center_bore_diam").disabled = bound;
+          document.getElementById("center_bore_diam_num").disabled = bound;
+          if (bound) updateBoundBore();
+          onParamChange();
+        });
 
       // Checkbox triggers rebuild
       document
@@ -861,6 +961,7 @@
         pitch: 8.9,
         end_buffer: 9,
         chamfer_size: 1,
+        tunnel_tol: 0.2,
       };
 
       document.getElementById("btn-reset").addEventListener("click", () => {
@@ -869,10 +970,16 @@
           document.getElementById(id + "_num").value = val;
         });
         document.getElementById("enable_ribs").checked = true;
+        document.getElementById("center_bore_bind").checked = true;
+        document.getElementById("center_bore_diam").disabled = true;
+        document.getElementById("center_bore_diam_num").disabled = true;
+        updateBoreMax();
+        updateBoundBore();
         generateCoil();
       });
 
-      // Initial generation on page load
+      // Set initial bore max and generate
+      updateBoreMax();
       generateCoil();
     </script>
   </body>

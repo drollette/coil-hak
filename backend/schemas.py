@@ -58,6 +58,12 @@ class CoilRequest(BaseModel):
         le=1.0,
         description="Extra diameter clearance for wire tunnels in mm"
     )
+    center_bore_diam: float | None = Field(
+        default=None,
+        ge=0.5,
+        le=200.0,
+        description="Center bore diameter in mm (None = wire_diam + tunnel_tol)"
+    )
 
 
 class ComputedValues(BaseModel):
