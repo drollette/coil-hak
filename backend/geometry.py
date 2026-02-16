@@ -28,6 +28,7 @@ def build_coil_former(
     enable_ribs: bool = True,
     chamfer_size: float = 0.5,
     tunnel_tol: float = 0.2,
+    center_bore_diam: float | None = None,
 ) -> tuple[cq.Workplane, CoilInfo]:
     """
     Build a parametric coil former with V-groove helix and wire tunnels.
@@ -53,7 +54,10 @@ def build_coil_former(
     # Derived dimensions
     cylinder_r = actual_coil_diam / 2.0
     rib_diam = pvc_id
-    center_bore_r = (wire_diam + 0.2) / 2.0
+    if center_bore_diam is None:
+        center_bore_r = (wire_diam + tunnel_tol) / 2.0
+    else:
+        center_bore_r = min(center_bore_diam, actual_coil_diam) / 2.0
     r_wire = wire_diam / 2.0
     r_tunnel = r_wire + (tunnel_tol / 2.0)
 

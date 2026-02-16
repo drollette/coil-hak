@@ -7,13 +7,13 @@ class CoilRequest(BaseModel):
     """Request parameters for generating a coil former."""
 
     wire_len: float = Field(
-        default=90.83,
+        default=668,
         ge=5.0,
         le=2000.0,
         description="Target wire length in mm"
     )
     wire_diam: float = Field(
-        default=3.5,
+        default=2,
         ge=0.5,
         le=10.0,
         description="Wire diameter in mm"
@@ -25,19 +25,19 @@ class CoilRequest(BaseModel):
         description="PVC pipe inner diameter in mm"
     )
     coil_diameter: float = Field(
-        default=15.0,
+        default=25,
         ge=5.0,
         le=80.0,
         description="Desired coil diameter in mm (capped for PVC clearance)"
     )
     pitch: float = Field(
-        default=10.0,
+        default=8.9,
         ge=2.0,
         le=50.0,
         description="Vertical distance per turn in mm"
     )
     end_buffer: float = Field(
-        default=10.0,
+        default=9,
         ge=2.0,
         le=30.0,
         description="Space for ribs and transitions at top/bottom in mm"
@@ -47,7 +47,7 @@ class CoilRequest(BaseModel):
         description="Enable friction ribs for PVC grip"
     )
     chamfer_size: float = Field(
-        default=0.5,
+        default=1,
         ge=0.0,
         le=3.0,
         description="Chamfer size on top/bottom edges in mm"
@@ -57,6 +57,12 @@ class CoilRequest(BaseModel):
         ge=0.0,
         le=1.0,
         description="Extra diameter clearance for wire tunnels in mm"
+    )
+    center_bore_diam: float | None = Field(
+        default=None,
+        ge=0.5,
+        le=200.0,
+        description="Center bore diameter in mm (None = wire_diam + tunnel_tol)"
     )
 
 
