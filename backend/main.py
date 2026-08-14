@@ -9,12 +9,14 @@ import shutil
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, FastAPI, BackgroundTasks
+from fastapi import APIRouter, FastAPI, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .schemas import CoilRequest, CoilResponse, ComputedValues
+from .coax_data import COAX_TYPES
+from .electrical import estimate_electrical_length, estimate_inductance_uh
+from .schemas import CoaxType, CoilRequest, CoilResponse, ComputedValues
 from .geometry import build_coil_former, export_step, export_stl
 
 # Paths
@@ -81,6 +83,14 @@ def generate_coil(
     geometry rebuild the way an `async def` doing the same blocking work
     in-line would.
     """
+    if request.wire_type == "coax" and (
+        request.velocity_factor is None or request.frequency_mhz is None
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="velocity_factor and frequency_mhz are required when wire_type is 'coax'",
+        )
+
     # Generate unique job ID
     job_id = str(uuid.uuid4())
     job_dir = OUTPUTS_DIR / job_id
@@ -111,6 +121,22 @@ def generate_coil(
     # Schedule cleanup
     background_tasks.add_task(cleanup_job, job_id)
 
+    inductance_uh = None
+    electrical_degrees = None
+    wavelength_fraction = None
+    if request.wire_type == "coax":
+        electrical_degrees, wavelength_fraction = estimate_electrical_length(
+            wire_len_mm=request.wire_len,
+            velocity_factor=request.velocity_factor,
+            frequency_mhz=request.frequency_mhz,
+        )
+    else:
+        inductance_uh = estimate_inductance_uh(
+            turns=info.turns,
+            coil_diameter_mm=info.coil_diameter,
+            winding_height_mm=info.winding_height,
+        )
+
     return CoilResponse(
         uuid=job_id,
         computed=ComputedValues(
@@ -118,6 +144,9 @@ def generate_coil(
             total_height=round(info.total_height, 2),
             coil_diameter=round(info.coil_diameter, 2),
             winding_height=round(info.winding_height, 2),
+            inductance_uh=round(inductance_uh, 3) if inductance_uh is not None else None,
+            electrical_degrees=round(electrical_degrees, 2) if electrical_degrees is not None else None,
+            wavelength_fraction=round(wavelength_fraction, 4) if wavelength_fraction is not None else None,
         ),
         stl_url=f"{ROUTE_PREFIX}/outputs/{job_id}/coil.stl",
         step_url=f"{ROUTE_PREFIX}/outputs/{job_id}/coil.step",
@@ -149,7 +178,6 @@ def download_file(job_id: str, filename: str) -> FileResponse:
             export_step(result, file_path)
 
     if not file_path.exists():
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="File not found")
 
     # Determine media type
@@ -164,6 +192,13 @@ def download_file(job_id: str, filename: str) -> FileResponse:
         media_type=media_type,
         filename=filename,
     )
+
+
+@router.get("/coax-types", response_model=list[CoaxType])
+async def list_coax_types() -> list[dict]:
+    """Reference data for common coax cable types. See backend/coax_data.py
+    for the values and their sources."""
+    return COAX_TYPES
 
 
 @router.get("/health")

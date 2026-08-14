@@ -226,6 +226,183 @@
         box-shadow: 0 0 0 1px var(--border);
       }
 
+      .control-group select {
+        width: 100%;
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 6px;
+        border-radius: 0;
+        font-family: inherit;
+        font-size: 0.8rem;
+        cursor: pointer;
+      }
+
+      .control-group select:focus {
+        outline: none;
+        box-shadow: 0 0 0 1px var(--border);
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      /* Wire Type segmented toggle */
+      .segmented-toggle {
+        display: flex;
+        border: 1px solid var(--border);
+      }
+
+      .segmented-toggle button {
+        flex: 1;
+        padding: 8px 4px;
+        background: #fff;
+        border: none;
+        border-right: 1px solid var(--border);
+        font-family: inherit;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-dim);
+        cursor: pointer;
+      }
+
+      .segmented-toggle button:last-child {
+        border-right: none;
+      }
+
+      .segmented-toggle button.active {
+        background: var(--text);
+        color: #fff;
+      }
+
+      .sources-link {
+        display: inline-block;
+        margin-top: -8px;
+        margin-bottom: 18px;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-dim);
+        text-decoration: underline;
+        cursor: pointer;
+        background: none;
+        border: none;
+        padding: 0;
+        font-family: inherit;
+      }
+
+      .sources-link:hover {
+        color: var(--text);
+      }
+
+      .bend-warning {
+        font-size: 0.75rem;
+        line-height: 1.4;
+        border: 1px solid var(--border);
+        padding: 10px;
+        margin-bottom: 18px;
+        background: var(--accent);
+      }
+
+      .unit-toggle-btn {
+        margin-left: 6px;
+        padding: 1px 6px;
+        font-size: 0.65rem;
+        font-family: inherit;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        background: #fff;
+        border: 1px solid var(--border-light);
+        color: var(--text-dim);
+        cursor: pointer;
+      }
+
+      .unit-toggle-btn:hover {
+        background: var(--accent);
+      }
+
+      /* Sources modal */
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        padding: 20px;
+      }
+
+      .modal-box {
+        background: #fff;
+        border: 1px solid var(--border);
+        max-width: 480px;
+        width: 100%;
+        max-height: 80vh;
+        overflow-y: auto;
+        padding: 20px;
+      }
+
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 10px;
+        margin-bottom: 14px;
+      }
+
+      .modal-header h3 {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.15em;
+      }
+
+      .modal-close {
+        background: none;
+        border: none;
+        font-size: 1.3rem;
+        line-height: 1;
+        cursor: pointer;
+        color: var(--text);
+        padding: 0 4px;
+      }
+
+      .modal-note {
+        font-size: 0.75rem;
+        color: var(--text-dim);
+        margin-bottom: 14px;
+        line-height: 1.4;
+      }
+
+      .source-entry {
+        margin-bottom: 14px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid var(--border-light);
+        font-size: 0.8rem;
+      }
+
+      .source-entry:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+      }
+
+      .source-entry .source-name {
+        font-weight: 700;
+      }
+
+      .source-entry .source-specs {
+        color: var(--text-dim);
+        margin: 4px 0;
+        font-size: 0.75rem;
+      }
+
+      .source-entry a {
+        color: var(--text);
+      }
+
       /* Checkbox row */
       .check-row {
         display: flex;
@@ -467,6 +644,17 @@
         <div class="section-heading">Wire</div>
 
         <div class="control-group">
+          <div class="segmented-toggle" role="radiogroup" aria-label="Wire type">
+            <button type="button" class="active" id="wire-type-wire" data-value="wire">
+              Bare / Insulated Wire
+            </button>
+            <button type="button" id="wire-type-coax" data-value="coax">
+              Coaxial Cable
+            </button>
+          </div>
+        </div>
+
+        <div class="control-group">
           <label>Wire Length <span class="unit">mm</span></label>
           <div class="slider-row">
             <input
@@ -489,13 +677,13 @@
         </div>
 
         <div class="control-group">
-          <label>Wire Diameter <span class="unit">mm</span></label>
+          <label><span id="wire_diam_label_text">Wire Diameter</span> <span class="unit">mm</span></label>
           <div class="slider-row">
             <input
               type="range"
               id="wire_diam"
               min="0.5"
-              max="6.0"
+              max="15.0"
               step="0.1"
               value="2"
             />
@@ -503,12 +691,83 @@
               type="number"
               id="wire_diam_num"
               min="0.5"
-              max="6.0"
+              max="15.0"
               step="0.1"
               value="2"
             />
           </div>
         </div>
+
+        <div class="control-group coax-only hidden">
+          <label>
+            Coax Type
+            <span class="unit" id="coax_impedance_hint"></span>
+          </label>
+          <select id="coax_type">
+            <option value="rg58">RG-58</option>
+            <option value="rg8x">RG-8X</option>
+            <option value="rg213">RG-213</option>
+            <option value="rg6">RG-6</option>
+            <option value="lmr400">LMR-400</option>
+            <option value="rg316">RG-316</option>
+            <option value="rg174">RG-174</option>
+            <option value="rg142">RG-142</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <button
+          type="button"
+          class="sources-link coax-only hidden"
+          id="link-sources"
+        >
+          Sources
+        </button>
+
+        <div class="control-group coax-only hidden">
+          <label>Velocity Factor</label>
+          <div class="slider-row">
+            <input
+              type="range"
+              id="velocity_factor"
+              min="0.4"
+              max="1.0"
+              step="0.01"
+              value="0.66"
+            />
+            <input
+              type="number"
+              id="velocity_factor_num"
+              min="0.4"
+              max="1.0"
+              step="0.01"
+              value="0.66"
+            />
+          </div>
+        </div>
+
+        <div class="control-group coax-only hidden">
+          <label>Frequency <span class="unit">MHz</span></label>
+          <div class="slider-row">
+            <input
+              type="range"
+              id="frequency_mhz"
+              min="1"
+              max="3000"
+              step="0.1"
+              value="14.2"
+            />
+            <input
+              type="number"
+              id="frequency_mhz_num"
+              min="1"
+              max="3000"
+              step="0.1"
+              value="14.2"
+            />
+          </div>
+        </div>
+
+        <div class="bend-warning coax-only hidden" id="bend-radius-warning"></div>
 
         <div class="section-heading">Coil Geometry</div>
 
@@ -704,6 +963,24 @@
             <span>Coil Diameter</span>
             <span class="info-val" id="info-coil-d">-</span>
           </div>
+          <div class="info-row wire-only">
+            <span>Est. Inductance</span>
+            <span class="info-val" id="info-inductance">-</span>
+          </div>
+          <div class="info-row coax-only hidden">
+            <span>
+              Electrical Length
+              <button
+                type="button"
+                class="unit-toggle-btn"
+                id="btn-electrical-unit"
+                title="Toggle degrees / fraction of wavelength"
+              >
+                &deg; &#8646; &lambda;
+              </button>
+            </span>
+            <span class="info-val" id="info-electrical">-</span>
+          </div>
         </div>
 
         <div class="btn-row">
@@ -735,6 +1012,27 @@
           <a href="/">w7hak.com</a></span
         >
       </footer>
+    </div>
+
+    <div class="modal-overlay hidden" id="sources-modal">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3>Coax Reference Sources</h3>
+          <button type="button" class="modal-close" id="btn-close-sources">
+            &times;
+          </button>
+        </div>
+        <p class="modal-note">
+          Velocity factor, outer diameter, and minimum bend radius below are
+          representative values for a common/generic version of each cable
+          type, drawn from the linked manufacturer datasheets. Where a
+          datasheet didn't give a bend radius, the standard cable-industry
+          rule of thumb of 10&times; outer diameter is used instead and
+          marked as a guideline, not a spec. Always check your own cable's
+          datasheet for a real build.
+        </p>
+        <div id="sources-list"></div>
+      </div>
     </div>
 
     <!-- Three.js from CDN -->
@@ -820,9 +1118,10 @@
       // Get current parameters
       function getParams() {
         const bound = document.getElementById("center_bore_bind").checked;
-        return {
+        const params = {
           wire_len: parseFloat(document.getElementById("wire_len").value),
           wire_diam: parseFloat(document.getElementById("wire_diam").value),
+          wire_type: currentWireType,
           pvc_id: parseFloat(document.getElementById("pvc_id").value),
           coil_diameter: parseFloat(
             document.getElementById("coil_diameter").value
@@ -838,6 +1137,16 @@
             ? null
             : parseFloat(document.getElementById("center_bore_diam").value),
         };
+        if (currentWireType === "coax") {
+          params.coax_type = document.getElementById("coax_type").value;
+          params.velocity_factor = parseFloat(
+            document.getElementById("velocity_factor").value
+          );
+          params.frequency_mhz = parseFloat(
+            document.getElementById("frequency_mhz").value
+          );
+        }
+        return params;
       }
 
       // Show/hide loading overlay
@@ -997,7 +1306,22 @@
         "chamfer_size",
         "tunnel_tol",
         "center_bore_diam",
+        "velocity_factor",
+        "frequency_mhz",
       ];
+
+      // Params that feed the live inductance/electrical-length estimate
+      // and/or the coil-diameter and bend-radius checks.
+      const liveRecalcIds = new Set([
+        "wire_len",
+        "wire_diam",
+        "pvc_id",
+        "coil_diameter",
+        "pitch",
+        "velocity_factor",
+        "frequency_mhz",
+      ]);
+      const coilMaxRecalcIds = new Set(["coil_diameter", "pvc_id", "wire_diam"]);
 
       function onParamChange() {
         setDirty(true);
@@ -1049,6 +1373,135 @@
         document.getElementById("center_bore_diam_num").value = val;
       }
 
+      // --- Live electrical estimates ---------------------------------
+      // Inductance and electrical length are cheap pure math (no
+      // CadQuery), so unlike the 3D geometry they don't need to wait for
+      // Apply — they update on every relevant slider/input change. This
+      // mirrors the same turns/winding-height formula backend/geometry.py
+      // uses (see build_coil_former), so the number shown here matches
+      // what a subsequent Apply will confirm via the server.
+
+      function computeTurnsAndWindingHeight(wireLen, coilDiameter, pitch, wireDiam, pvcId) {
+        const actualCoilDiam = Math.min(coilDiameter, pvcId - wireDiam);
+        const circumference = Math.PI * actualCoilDiam;
+        const baseTurns = Math.sqrt(
+          (wireLen * wireLen) / (circumference * circumference + pitch * pitch)
+        );
+        const extensionTurns = wireDiam / circumference;
+        const turns = baseTurns + extensionTurns;
+        return { turns, windingHeight: turns * pitch, actualCoilDiam };
+      }
+
+      // Wheeler's approximation for a single-layer air-core solenoid:
+      // L (uH) = d^2 n^2 / (18d + 40l), d/l in inches. See
+      // backend/electrical.py for the same formula server-side.
+      function computeInductanceUh(turns, coilDiameterMm, windingHeightMm) {
+        const dIn = coilDiameterMm / 25.4;
+        const lIn = windingHeightMm / 25.4;
+        const denom = 18 * dIn + 40 * lIn;
+        if (denom <= 0) return 0;
+        return (dIn * dIn * turns * turns) / denom;
+      }
+
+      // A wave in the cable travels at velocity_factor * c, so one
+      // wavelength in the cable spans (velocity_factor * c / frequency) of
+      // physical cable length. See backend/electrical.py.
+      function computeElectricalLength(wireLenMm, velocityFactor, frequencyMhz) {
+        if (frequencyMhz <= 0 || velocityFactor <= 0) {
+          return { degrees: 0, fraction: 0 };
+        }
+        const c = 299792458.0;
+        const freespaceWavelengthMm = (c / (frequencyMhz * 1e6)) * 1000;
+        const cableWavelengthMm = velocityFactor * freespaceWavelengthMm;
+        const fraction = wireLenMm / cableWavelengthMm;
+        return { degrees: 360 * fraction, fraction };
+      }
+
+      let electricalUnitMode = "degrees"; // or "wavelength"
+      let lastElectrical = null;
+
+      function renderElectricalLength() {
+        if (!lastElectrical) return;
+        document.getElementById("info-electrical").textContent =
+          electricalUnitMode === "degrees"
+            ? lastElectrical.degrees.toFixed(1) + "°"
+            : lastElectrical.fraction.toFixed(3) + "λ";
+      }
+
+      document
+        .getElementById("btn-electrical-unit")
+        .addEventListener("click", () => {
+          electricalUnitMode =
+            electricalUnitMode === "degrees" ? "wavelength" : "degrees";
+          renderElectricalLength();
+        });
+
+      function updateLiveElectrical() {
+        const wireLen = parseFloat(document.getElementById("wire_len").value);
+        const wireDiam = parseFloat(document.getElementById("wire_diam").value);
+        const pvcId = parseFloat(document.getElementById("pvc_id").value);
+        const coilDiameter = parseFloat(
+          document.getElementById("coil_diameter").value
+        );
+        const pitch = parseFloat(document.getElementById("pitch").value);
+
+        if (currentWireType === "coax") {
+          const velocityFactor = parseFloat(
+            document.getElementById("velocity_factor").value
+          );
+          const frequencyMhz = parseFloat(
+            document.getElementById("frequency_mhz").value
+          );
+          lastElectrical = computeElectricalLength(
+            wireLen,
+            velocityFactor,
+            frequencyMhz
+          );
+          renderElectricalLength();
+        } else {
+          const { turns, windingHeight, actualCoilDiam } =
+            computeTurnsAndWindingHeight(wireLen, coilDiameter, pitch, wireDiam, pvcId);
+          const inductance = computeInductanceUh(turns, actualCoilDiam, windingHeight);
+          document.getElementById("info-inductance").textContent =
+            inductance.toFixed(3) + " µH";
+        }
+      }
+
+      // Live warning if the coil's winding radius is tighter than the
+      // selected coax's minimum bend radius — checked client-side against
+      // the same coaxTypes reference data used to populate the dropdown
+      // and Sources modal, so it updates immediately while dragging
+      // sliders rather than waiting for Apply.
+      function updateBendRadiusWarning() {
+        const warningEl = document.getElementById("bend-radius-warning");
+        if (currentWireType !== "coax") {
+          warningEl.classList.add("hidden");
+          return;
+        }
+        const type = coaxTypes.find(
+          (t) => t.id === document.getElementById("coax_type").value
+        );
+        if (!type || type.min_bend_radius_mm == null) {
+          warningEl.classList.add("hidden");
+          return;
+        }
+        const coilD = parseFloat(document.getElementById("coil_diameter").value);
+        const wireD = parseFloat(document.getElementById("wire_diam").value);
+        const windingRadius = (coilD + wireD) / 2;
+        if (windingRadius < type.min_bend_radius_mm) {
+          const guideline = type.bend_radius_is_guideline
+            ? " (10× OD guideline)"
+            : "";
+          warningEl.textContent =
+            `⚠ This winding radius (${windingRadius.toFixed(1)} mm) is tighter ` +
+            `than ${type.name}'s minimum bend radius (${type.min_bend_radius_mm.toFixed(1)} mm${guideline}). ` +
+            `The cable may be damaged — consider a larger Coil Diameter or Friction Rib Outer Diameter.`;
+          warningEl.classList.remove("hidden");
+        } else {
+          warningEl.classList.add("hidden");
+        }
+      }
+
       paramIds.forEach((id) => {
         const slider = document.getElementById(id);
         const numInput = document.getElementById(id + "_num");
@@ -1056,10 +1509,12 @@
         slider.addEventListener("input", () => {
           numInput.value = slider.value;
           if (id === "wire_diam" || id === "tunnel_tol") updateBoundBore();
-          if (id === "coil_diameter" || id === "pvc_id" || id === "wire_diam") {
+          if (coilMaxRecalcIds.has(id)) {
             updateCoilDiameterMax();
             updateBoreMax();
           }
+          if (liveRecalcIds.has(id)) updateLiveElectrical();
+          if (coilMaxRecalcIds.has(id)) updateBendRadiusWarning();
           onParamChange();
         });
 
@@ -1068,14 +1523,144 @@
           if (!isNaN(v)) {
             slider.value = v;
             if (id === "wire_diam" || id === "tunnel_tol") updateBoundBore();
-            if (id === "coil_diameter" || id === "pvc_id" || id === "wire_diam") {
+            if (coilMaxRecalcIds.has(id)) {
               updateCoilDiameterMax();
               updateBoreMax();
             }
+            if (liveRecalcIds.has(id)) updateLiveElectrical();
+            if (coilMaxRecalcIds.has(id)) updateBendRadiusWarning();
             onParamChange();
           }
         });
       });
+
+      // Wire type state (bare/insulated wire vs coax) and the coax
+      // reference data fetched from the backend, shared by the Wire Type
+      // toggle, the Coax Type select, the bend-radius warning, and the
+      // Sources modal below.
+      let currentWireType = "wire";
+      let coaxTypes = [];
+
+      function renderSourcesModal() {
+        const list = document.getElementById("sources-list");
+        list.innerHTML = "";
+        coaxTypes
+          .filter((t) => t.id !== "custom")
+          .forEach((t) => {
+            const entry = document.createElement("div");
+            entry.className = "source-entry";
+            const guideline = t.bend_radius_is_guideline
+              ? " (10× OD guideline)"
+              : "";
+            entry.innerHTML = `
+              <div class="source-name">${t.name}</div>
+              <div class="source-specs">
+                Z₀ ${t.impedance_ohms}Ω &middot; VF ${t.velocity_factor} &middot;
+                OD ${t.outer_diameter_mm} mm &middot;
+                min bend ${t.min_bend_radius_mm} mm${guideline}
+              </div>
+              <a href="${t.source_url}" target="_blank" rel="noopener noreferrer">${t.source_name}</a>
+            `;
+            list.appendChild(entry);
+          });
+      }
+
+      fetch(API_URL + "/coax-types")
+        .then((r) => r.json())
+        .then((types) => {
+          coaxTypes = types;
+          renderSourcesModal();
+          updateBendRadiusWarning();
+          updateCoaxImpedanceHint();
+        })
+        .catch((err) => console.error("Failed to load coax types:", err));
+
+      // Impedance is reference info only (not used in any calculation —
+      // electrical length depends only on velocity factor and frequency),
+      // but matters to the user up front: mixing 50ohm and 75ohm sections
+      // in a phasing line is a real mistake to avoid.
+      function updateCoaxImpedanceHint() {
+        const hint = document.getElementById("coax_impedance_hint");
+        const type = coaxTypes.find(
+          (t) => t.id === document.getElementById("coax_type").value
+        );
+        hint.textContent =
+          type && type.impedance_ohms != null ? `${type.impedance_ohms}Ω` : "";
+      }
+
+      function setWireType(type) {
+        currentWireType = type;
+        document
+          .getElementById("wire-type-wire")
+          .classList.toggle("active", type === "wire");
+        document
+          .getElementById("wire-type-coax")
+          .classList.toggle("active", type === "coax");
+        document
+          .querySelectorAll(".coax-only")
+          .forEach((el) => el.classList.toggle("hidden", type !== "coax"));
+        document
+          .querySelectorAll(".wire-only")
+          .forEach((el) => el.classList.toggle("hidden", type === "coax"));
+        document.getElementById("wire_diam_label_text").textContent =
+          type === "coax" ? "Cable Outer Diameter" : "Wire Diameter";
+        updateLiveElectrical();
+        updateBendRadiusWarning();
+        updateCoaxImpedanceHint();
+        onParamChange();
+      }
+
+      document
+        .getElementById("wire-type-wire")
+        .addEventListener("click", () => setWireType("wire"));
+      document
+        .getElementById("wire-type-coax")
+        .addEventListener("click", () => setWireType("coax"));
+
+      document
+        .getElementById("coax_type")
+        .addEventListener("change", (e) => {
+          const type = coaxTypes.find((t) => t.id === e.target.value);
+          if (type && type.id !== "custom") {
+            if (type.velocity_factor != null) {
+              document.getElementById("velocity_factor").value =
+                type.velocity_factor;
+              document.getElementById("velocity_factor_num").value =
+                type.velocity_factor;
+            }
+            if (type.outer_diameter_mm != null) {
+              document.getElementById("wire_diam").value =
+                type.outer_diameter_mm;
+              document.getElementById("wire_diam_num").value =
+                type.outer_diameter_mm;
+            }
+          }
+          updateBoundBore();
+          updateCoilDiameterMax();
+          updateBoreMax();
+          updateBendRadiusWarning();
+          updateCoaxImpedanceHint();
+          updateLiveElectrical();
+          onParamChange();
+        });
+
+      document
+        .getElementById("link-sources")
+        .addEventListener("click", () => {
+          document.getElementById("sources-modal").classList.remove("hidden");
+        });
+      document
+        .getElementById("btn-close-sources")
+        .addEventListener("click", () => {
+          document.getElementById("sources-modal").classList.add("hidden");
+        });
+      document
+        .getElementById("sources-modal")
+        .addEventListener("click", (e) => {
+          if (e.target.id === "sources-modal") {
+            e.target.classList.add("hidden");
+          }
+        });
 
       // Center bore bind checkbox
       document
@@ -1137,15 +1722,19 @@
         document.getElementById("center_bore_bind").checked = true;
         document.getElementById("center_bore_diam").disabled = true;
         document.getElementById("center_bore_diam_num").disabled = true;
+        document.getElementById("coax_type").value = "rg58";
+        setWireType("wire");
         updateCoilDiameterMax();
         updateBoreMax();
         updateBoundBore();
+        updateLiveElectrical();
         generateCoil();
       });
 
       // Set initial coil/bore max and generate
       updateCoilDiameterMax();
       updateBoreMax();
+      updateLiveElectrical();
       generateCoil();
     </script>
   </body>
