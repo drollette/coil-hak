@@ -3,22 +3,53 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="canonical" href="https://coil.w7hak.com/" />
+    <link rel="canonical" href="https://w7hak.com/coil/" />
     <meta
       name="description"
       content="Parametric coil former generator for ham radio phasing lines. Design, preview in 3D, and download STL/STEP files for 3D printing."
     />
     <title>W7HAK Coil Former</title>
     <style>
+      /* Self-hosted fonts served by the main w7hak.com site (same origin) */
+      @font-face {
+        font-family: "Black Ops One";
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url("/fonts/black-ops-one-400.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "IBM Plex Mono";
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url("/fonts/ibm-plex-mono-400.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "IBM Plex Mono";
+        font-style: normal;
+        font-weight: 500;
+        font-display: swap;
+        src: url("/fonts/ibm-plex-mono-500.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "IBM Plex Mono";
+        font-style: normal;
+        font-weight: 700;
+        font-display: swap;
+        src: url("/fonts/ibm-plex-mono-700.woff2") format("woff2");
+      }
+
       :root {
-        --bg: #1a1a2e;
-        --panel: #16213e;
-        --accent: #0f3460;
-        --highlight: #e94560;
-        --text: #eaeaea;
-        --text-dim: #a0a0b0;
-        --input-bg: #0f3460;
-        --border: #2a2a4a;
+        --bg: #ffffff;
+        --panel: #ffffff;
+        --accent: #f5f5f5;
+        --highlight: #000000;
+        --text: #000000;
+        --text-dim: #4b5563;
+        --input-bg: #ffffff;
+        --border: #000000;
+        --border-light: #d1d5db;
       }
 
       * {
@@ -28,11 +59,26 @@
       }
 
       body {
-        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+        font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo,
+          monospace;
         background: var(--bg);
         color: var(--text);
         height: 100vh;
         overflow: hidden;
+      }
+
+      /* Custom scrollbar, matching the main site */
+      ::-webkit-scrollbar {
+        width: 10px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #000;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #333;
       }
 
       .app {
@@ -54,13 +100,14 @@
       }
 
       header h1 {
-        font-size: 1.25rem;
-        font-weight: 600;
+        font-size: 1.1rem;
+        font-weight: 400;
         letter-spacing: 0.02em;
       }
 
       header h1 span {
-        color: var(--highlight);
+        font-family: "Black Ops One", ui-sans-serif, sans-serif;
+        letter-spacing: 0.05em;
       }
 
       .header-right {
@@ -70,26 +117,30 @@
       }
 
       .version-badge {
-        font-size: 0.75rem;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
         background: var(--accent);
+        border: 1px solid var(--border-light);
         padding: 2px 10px;
-        border-radius: 12px;
         color: var(--text-dim);
       }
 
       .toggle-btn {
         display: none;
-        background: var(--accent);
+        background: #fff;
         border: 1px solid var(--border);
         color: var(--text);
         padding: 6px 14px;
-        border-radius: 6px;
-        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 0.75rem;
+        font-family: inherit;
         cursor: pointer;
       }
 
       .toggle-btn:hover {
-        background: #1a4a80;
+        background: var(--accent);
       }
 
       /* Sidebar controls */
@@ -101,10 +152,11 @@
       }
 
       .sidebar h2 {
-        font-size: 0.85rem;
+        font-size: 0.8rem;
+        font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: var(--text-dim);
+        letter-spacing: 0.3em;
+        color: var(--text);
         margin-bottom: 16px;
       }
 
@@ -116,13 +168,16 @@
         display: flex;
         justify-content: space-between;
         align-items: baseline;
-        font-size: 0.85rem;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-dim);
         margin-bottom: 6px;
       }
 
       .control-group label .unit {
         color: var(--text-dim);
-        font-size: 0.75rem;
+        font-size: 0.7rem;
       }
 
       .control-group .slider-row {
@@ -140,9 +195,10 @@
         width: 72px;
         background: var(--input-bg);
         border: 1px solid var(--border);
-        color: var(--highlight);
+        color: var(--text);
         padding: 4px 6px;
-        border-radius: 4px;
+        border-radius: 0;
+        font-family: inherit;
         font-size: 0.8rem;
         font-variant-numeric: tabular-nums;
         text-align: right;
@@ -155,8 +211,8 @@
       }
 
       .control-group input[type="number"]:focus {
-        outline: 1px solid var(--highlight);
-        border-color: var(--highlight);
+        outline: none;
+        box-shadow: 0 0 0 1px var(--border);
       }
 
       /* Checkbox row */
@@ -164,13 +220,15 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        font-size: 0.8rem;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
         margin-bottom: 6px;
         color: var(--text-dim);
       }
 
       .check-row input[type="checkbox"] {
-        accent-color: var(--highlight);
+        accent-color: var(--text);
         width: 16px;
         height: 16px;
         cursor: pointer;
@@ -183,16 +241,18 @@
       /* Info panel */
       .info-panel {
         background: var(--accent);
-        border-radius: 8px;
+        border: 1px solid var(--border-light);
+        border-radius: 0;
         padding: 14px;
         margin-top: 12px;
       }
 
       .info-panel h3 {
-        font-size: 0.8rem;
+        font-size: 0.75rem;
+        font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: var(--text-dim);
+        letter-spacing: 0.15em;
+        color: var(--text);
         margin-bottom: 10px;
       }
 
@@ -201,15 +261,15 @@
         justify-content: space-between;
         font-size: 0.85rem;
         padding: 4px 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        border-bottom: 1px solid var(--border-light);
       }
 
       .info-row:last-child {
         border-bottom: none;
       }
       .info-row .info-val {
-        color: var(--highlight);
-        font-weight: 600;
+        color: var(--text);
+        font-weight: 700;
         font-variant-numeric: tabular-nums;
       }
 
@@ -217,17 +277,16 @@
       .btn {
         width: 100%;
         padding: 12px;
-        border: none;
-        border-radius: 6px;
-        font-size: 0.9rem;
+        border: 1px solid var(--border);
+        border-radius: 0;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-family: inherit;
+        font-size: 0.8rem;
         font-weight: 600;
         cursor: pointer;
-        transition: background 0.15s, transform 0.1s;
+        transition: background 0.15s, color 0.15s;
         margin-top: 10px;
-      }
-
-      .btn:active {
-        transform: scale(0.98);
       }
 
       .btn:disabled {
@@ -236,22 +295,22 @@
       }
 
       .btn-primary {
-        background: var(--highlight);
-        color: white;
+        background: var(--text);
+        color: #fff;
       }
 
       .btn-primary:hover:not(:disabled) {
-        background: #d63851;
+        background: #1f2937;
       }
 
       .btn-secondary {
-        background: var(--accent);
+        background: #fff;
         color: var(--text);
         border: 1px solid var(--border);
       }
 
       .btn-secondary:hover:not(:disabled) {
-        background: #1a4a80;
+        background: var(--accent);
       }
 
       .btn-row {
@@ -266,7 +325,7 @@
       /* 3D viewport */
       .viewport {
         position: relative;
-        background: #0d0d1a;
+        background: #f5f5f5;
         overflow: hidden;
       }
 
@@ -288,7 +347,7 @@
       .loading-overlay {
         position: absolute;
         inset: 0;
-        background: rgba(13, 13, 26, 0.9);
+        background: rgba(255, 255, 255, 0.9);
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -303,8 +362,8 @@
       .spinner {
         width: 40px;
         height: 40px;
-        border: 3px solid var(--border);
-        border-top-color: var(--highlight);
+        border: 3px solid var(--border-light);
+        border-top-color: var(--text);
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
       }
@@ -327,10 +386,21 @@
         background: var(--panel);
         border-top: 1px solid var(--border);
         padding: 8px 24px;
-        font-size: 0.75rem;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
         color: var(--text-dim);
         display: flex;
         justify-content: space-between;
+      }
+
+      footer a {
+        color: var(--text);
+        text-decoration: underline;
+      }
+
+      footer a:hover {
+        color: var(--text-dim);
       }
 
       /* Responsive: collapsible top panel */
@@ -632,9 +702,7 @@
         <span>Parametric Coil Former &middot; MIT License</span>
         <span
           >Built with Python + CadQuery for
-          <a href="https://w7hak.com" style="color: var(--highlight)"
-            >w7hak.com</a
-          ></span
+          <a href="/">w7hak.com</a></span
         >
       </footer>
     </div>
@@ -654,8 +722,13 @@
       import { OrbitControls } from "three/addons/controls/OrbitControls.js";
       import { STLLoader } from "three/addons/loaders/STLLoader.js";
 
-      // API URL (same origin for self-hosted)
-      const API_URL = "";
+      // API URL: derived from where this page itself is served (e.g. "" at
+      // the app root for local/docker dev, "/coil" when mounted under
+      // w7hak.com/coil/* by the Worker route), so it stays correct without
+      // hardcoding a path that has to match the backend's ROUTE_PREFIX.
+      const API_URL = window.location.pathname
+        .replace(/\/index\.html$/, "")
+        .replace(/\/$/, "");
 
       // Current job data
       let currentJob = null;
@@ -675,7 +748,7 @@
       const canvas = document.getElementById("three-canvas");
       const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      renderer.setClearColor(0x0d0d1a);
+      renderer.setClearColor(0xf5f5f5);
 
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
@@ -690,7 +763,7 @@
       const dir1 = new THREE.DirectionalLight(0xffffff, 0.8);
       dir1.position.set(50, 80, 60);
       scene.add(dir1);
-      const dir2 = new THREE.DirectionalLight(0x8888ff, 0.3);
+      const dir2 = new THREE.DirectionalLight(0xdddddd, 0.3);
       dir2.position.set(-40, -20, -30);
       scene.add(dir2);
 
@@ -787,9 +860,9 @@
             geometry.computeVertexNormals();
 
             const mat = new THREE.MeshPhongMaterial({
-              color: 0x4488cc,
-              specular: 0x222244,
-              shininess: 60,
+              color: 0x777777,
+              specular: 0x222222,
+              shininess: 40,
               side: THREE.DoubleSide,
               flatShading: false,
             });

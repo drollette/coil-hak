@@ -1,0 +1,17 @@
+{
+  "name": "coil-former-worker",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Cloudflare Worker + Container deployment for the coil former app, routed at w7hak.com/coil/*",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@cloudflare/containers": "^0.3.7"
+  },
+  "devDependencies": {
+    "wrangler": "^4.123.0"
+  }
+}
