@@ -160,6 +160,17 @@
         margin-bottom: 16px;
       }
 
+      .section-heading {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.25em;
+        color: var(--text-dim);
+        margin: 20px 0 12px;
+        padding-top: 14px;
+        border-top: 1px solid var(--border-light);
+      }
+
       .control-group {
         margin-bottom: 18px;
       }
@@ -453,6 +464,8 @@
       <aside class="sidebar collapsed" id="sidebar">
         <h2>Parameters</h2>
 
+        <div class="section-heading">Wire</div>
+
         <div class="control-group">
           <label>Wire Length <span class="unit">mm</span></label>
           <div class="slider-row">
@@ -460,7 +473,7 @@
               type="range"
               id="wire_len"
               min="5"
-              max="2000"
+              max="10000"
               step="1"
               value="668"
             />
@@ -468,7 +481,7 @@
               type="number"
               id="wire_len_num"
               min="5"
-              max="2000"
+              max="10000"
               step="1"
               value="668"
             />
@@ -497,14 +510,19 @@
           </div>
         </div>
 
+        <div class="section-heading">Coil Geometry</div>
+
         <div class="control-group">
-          <label>Coil Diameter <span class="unit">mm</span></label>
+          <label>
+            Coil Diameter <span class="unit">mm</span>
+            <span class="unit" id="coil_diameter_max_hint"></span>
+          </label>
           <div class="slider-row">
             <input
               type="range"
               id="coil_diameter"
               min="5"
-              max="60"
+              max="200"
               step="0.5"
               value="25"
             />
@@ -512,7 +530,7 @@
               type="number"
               id="coil_diameter_num"
               min="5"
-              max="60"
+              max="200"
               step="0.5"
               value="25"
             />
@@ -585,6 +603,8 @@
           </div>
         </div>
 
+        <div class="section-heading">Tunnels &amp; Bore</div>
+
         <div class="control-group">
           <label>Tunnel Tolerance <span class="unit">mm</span></label>
           <div class="slider-row">
@@ -635,6 +655,8 @@
           </div>
         </div>
 
+        <div class="section-heading">Friction Fit</div>
+
         <div class="control-group">
           <div class="check-row">
             <input type="checkbox" id="enable_ribs" checked />
@@ -646,7 +668,7 @@
               type="range"
               id="pvc_id"
               min="10"
-              max="80"
+              max="250"
               step="0.1"
               value="23.5"
             />
@@ -654,7 +676,7 @@
               type="number"
               id="pvc_id_num"
               min="10"
-              max="80"
+              max="250"
               step="0.1"
               value="23.5"
             />
@@ -956,6 +978,14 @@
         generateCoil();
       });
 
+      // Enter in a number field applies pending changes, same as clicking
+      // Apply, so keyboard-driven tweaking doesn't need a trip to the mouse.
+      document.getElementById("sidebar").addEventListener("keydown", (e) => {
+        if (e.key !== "Enter" || e.target.type !== "number") return;
+        e.preventDefault();
+        if (!applyBtn.disabled) generateCoil();
+      });
+
       // Slider + number input wiring
       const paramIds = [
         "wire_len",
@@ -971,6 +1001,25 @@
 
       function onParamChange() {
         setDirty(true);
+      }
+
+      // Cap coil diameter to what the friction-rib clearance allows (ribs
+      // must stay bigger than the coil body), and show that live so an
+      // out-of-range request doesn't just silently shrink after Apply.
+      function updateCoilDiameterMax() {
+        const pvc = parseFloat(document.getElementById("pvc_id").value);
+        const wd = parseFloat(document.getElementById("wire_diam").value);
+        const maxCoil = pvc - wd;
+        const slider = document.getElementById("coil_diameter");
+        const numInput = document.getElementById("coil_diameter_num");
+        slider.max = maxCoil;
+        numInput.max = maxCoil;
+        if (parseFloat(slider.value) > maxCoil) {
+          slider.value = maxCoil;
+          numInput.value = maxCoil;
+        }
+        document.getElementById("coil_diameter_max_hint").textContent =
+          `(max ${maxCoil.toFixed(1)})`;
       }
 
       // Cap center bore slider max to the effective coil diameter
@@ -1007,8 +1056,10 @@
         slider.addEventListener("input", () => {
           numInput.value = slider.value;
           if (id === "wire_diam" || id === "tunnel_tol") updateBoundBore();
-          if (id === "coil_diameter" || id === "pvc_id" || id === "wire_diam")
+          if (id === "coil_diameter" || id === "pvc_id" || id === "wire_diam") {
+            updateCoilDiameterMax();
             updateBoreMax();
+          }
           onParamChange();
         });
 
@@ -1017,8 +1068,10 @@
           if (!isNaN(v)) {
             slider.value = v;
             if (id === "wire_diam" || id === "tunnel_tol") updateBoundBore();
-            if (id === "coil_diameter" || id === "pvc_id" || id === "wire_diam")
+            if (id === "coil_diameter" || id === "pvc_id" || id === "wire_diam") {
+              updateCoilDiameterMax();
               updateBoreMax();
+            }
             onParamChange();
           }
         });
@@ -1084,12 +1137,14 @@
         document.getElementById("center_bore_bind").checked = true;
         document.getElementById("center_bore_diam").disabled = true;
         document.getElementById("center_bore_diam_num").disabled = true;
+        updateCoilDiameterMax();
         updateBoreMax();
         updateBoundBore();
         generateCoil();
       });
 
-      // Set initial bore max and generate
+      // Set initial coil/bore max and generate
+      updateCoilDiameterMax();
       updateBoreMax();
       generateCoil();
     </script>

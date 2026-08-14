@@ -9,8 +9,8 @@ class CoilRequest(BaseModel):
     wire_len: float = Field(
         default=668,
         ge=5.0,
-        le=2000.0,
-        description="Target wire length in mm"
+        le=10000.0,
+        description="Target wire length in mm. Raised to accommodate large-diameter coils, which need proportionally more wire per turn"
     )
     wire_diam: float = Field(
         default=2,
@@ -21,7 +21,7 @@ class CoilRequest(BaseModel):
     pvc_id: float = Field(
         default=23.5,
         ge=10.0,
-        le=100.0,
+        le=250.0,
         description=(
             "PVC pipe inner diameter in mm. Sets the friction ribs' outer "
             "diameter (shown in the UI as 'Friction Rib Outer Diameter') "
@@ -32,8 +32,8 @@ class CoilRequest(BaseModel):
     coil_diameter: float = Field(
         default=25,
         ge=5.0,
-        le=80.0,
-        description="Desired coil diameter in mm (capped for PVC clearance)"
+        le=200.0,
+        description="Desired coil diameter in mm (capped for PVC clearance — see pvc_id)"
     )
     pitch: float = Field(
         default=8.9,
