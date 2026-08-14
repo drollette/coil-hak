@@ -23,8 +23,11 @@ uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 python phasing_coil.py
 
 # Production deploy: Cloudflare Container, routed at w7hak.com/coil/* (not a
-# subdomain). Requires Docker running locally and a Cloudflare account on the
-# Workers Paid plan that owns the w7hak.com zone.
+# subdomain). Happens automatically via .github/workflows/deploy-cloudflare.yml
+# on push to main/master (needs CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID
+# repo secrets, set once via the GitHub web UI). To deploy manually instead,
+# requires Docker running locally and a Cloudflare account on the Workers
+# Paid plan that owns the w7hak.com zone:
 npm install
 npx wrangler deploy
 ```
@@ -69,4 +72,5 @@ curl -X POST http://localhost:8000/generate \
 
 - `ci.yml` — Builds Docker image on push/PR to main/master, runs a smoke test against `POST /generate`.
 - `docker-ghcr.yml` — Builds and pushes Docker image to `ghcr.io` on push to main/master, release publish, or manual dispatch.
+- `deploy-cloudflare.yml` — Runs `wrangler deploy` on push to main/master (or manual dispatch) to build and deploy the production Container + Worker route at `w7hak.com/coil/*`. Needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repo secrets.
 - `release.yml` — Manual workflow dispatch to bump semver, create a git tag, and publish a GitHub Release (which triggers the GHCR push).

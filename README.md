@@ -40,6 +40,25 @@ path-based routing: a Cloudflare Worker owns the `/coil/*` route on the
 this same Dockerfile unmodified. Everything else on the domain (the main
 w7hak.com site, on Cloudflare Pages) is untouched.
 
+### Automatic (CI/CD)
+
+`.github/workflows/deploy-cloudflare.yml` runs `wrangler deploy` on every push
+to `main`/`master` (and via manual "Run workflow" dispatch from the Actions
+tab), so no local terminal is needed for normal deploys. It needs two
+repository secrets, set once from the GitHub web UI at
+**Settings → Secrets and variables → Actions → New repository secret**:
+
+| Secret | Where to get it |
+|---|---|
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard → any domain's Overview page, right sidebar |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare dashboard → My Profile → API Tokens → Create Token. Use the "Edit Cloudflare Workers" template, and make sure it includes edit access to the `w7hak.com` zone (for the `/coil/*` route) plus Account → Containers → Edit |
+
+Both of those are browser-only steps — no CLI required. Once the secrets are
+set, merging to `main`/`master` (or running the workflow manually) builds and
+deploys the container.
+
+### Manual (local terminal)
+
 ```bash
 npm install
 npx wrangler deploy
