@@ -13,6 +13,23 @@ export class CoilFormerContainer extends Container {
     // under that prefix. See backend/main.py.
     ROUTE_PREFIX: "/coil",
   };
+
+  // The default port-readiness wait (20s) is too short for this image: it's
+  // a mamba/conda environment that has to import CadQuery/OpenCASCADE before
+  // uvicorn even starts listening, which routinely takes longer than that on
+  // a cold start (observed up to ~100s). Without this override, requests
+  // that arrive while the container is still starting fail outright with
+  // "container is not listening" / "container is not running" instead of
+  // waiting for it. See https://github.com/cloudflare/containers/issues/139.
+  async fetch(request) {
+    await this.startAndWaitForPorts({
+      ports: [this.defaultPort],
+      cancellationOptions: {
+        portReadyTimeoutMS: 120_000,
+      },
+    });
+    return this.containerFetch(request);
+  }
 }
 
 export default {
