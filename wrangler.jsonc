@@ -1,0 +1,52 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "coil-former",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-08-14",
+
+  // Path-based routing: this Worker owns /coil/* on the w7hak.com zone.
+  // Everything else on the zone continues to be served by the w7hak.com
+  // Cloudflare Pages project, unaffected by this deploy.
+  "routes": [
+    {
+      "pattern": "w7hak.com/coil/*",
+      "zone_name": "w7hak.com"
+    }
+  ],
+
+  "containers": [
+    {
+      "class_name": "CoilFormerContainer",
+      "image": "./Dockerfile",
+      // CadQuery/OpenCASCADE needs more headroom than the default "lite"
+      // instance (256 MiB). Bump this up (or down) in the dashboard if
+      // generation is slow/OOMing or if it's comfortably idle.
+      "instance_type": "standard-1",
+      // Job output files live on the container's local disk (see
+      // backend/main.py OUTPUTS_DIR), not shared storage, so a "generate"
+      // and the follow-up "download" must land on the same instance.
+      // Keep this at 1 unless that's reworked to use shared storage.
+      "max_instances": 1
+    }
+  ],
+
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "CoilFormerContainer",
+        "name": "COIL_CONTAINER"
+      }
+    ]
+  },
+
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["CoilFormerContainer"]
+    }
+  ],
+
+  "observability": {
+    "enabled": true
+  }
+}

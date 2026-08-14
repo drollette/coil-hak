@@ -1,6 +1,10 @@
 # Generated output files
 outputs/
 
+# Node / Wrangler (Cloudflare Container deploy tooling)
+node_modules/
+.wrangler/
+
 # Python
 __pycache__/
 *.py[cod]

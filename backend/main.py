@@ -4,11 +4,12 @@ Serves both the API and static frontend.
 """
 
 import asyncio
+import os
 import shutil
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import APIRouter, FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -23,6 +24,13 @@ STATIC_DIR = BASE_DIR / "wasm-coil-former" / "static"
 
 # Ensure outputs directory exists
 OUTPUTS_DIR.mkdir(exist_ok=True)
+
+# When deployed behind the w7hak.com Worker route (path-based routing, no
+# subdomain), requests arrive with the full "/coil" prefix still attached
+# rather than stripped by a reverse proxy, so the app must serve routes and
+# static files under that same prefix. Left empty for local/docker dev,
+# where the app is accessed at the domain root.
+ROUTE_PREFIX = os.environ.get("ROUTE_PREFIX", "").rstrip("/")
 
 app = FastAPI(
     title="Coil Former API",
@@ -47,7 +55,10 @@ async def cleanup_job(job_id: str, delay: int = 3600) -> None:
     shutil.rmtree(job_dir, ignore_errors=True)
 
 
-@app.post("/generate", response_model=CoilResponse)
+router = APIRouter(prefix=ROUTE_PREFIX)
+
+
+@router.post("/generate", response_model=CoilResponse)
 async def generate_coil(
     request: CoilRequest,
     background_tasks: BackgroundTasks
@@ -93,12 +104,12 @@ async def generate_coil(
             coil_diameter=round(info.coil_diameter, 2),
             winding_height=round(info.winding_height, 2),
         ),
-        stl_url=f"/outputs/{job_id}/coil.stl",
-        step_url=f"/outputs/{job_id}/coil.step",
+        stl_url=f"{ROUTE_PREFIX}/outputs/{job_id}/coil.stl",
+        step_url=f"{ROUTE_PREFIX}/outputs/{job_id}/coil.step",
     )
 
 
-@app.get("/outputs/{job_id}/{filename}")
+@router.get("/outputs/{job_id}/{filename}")
 async def download_file(job_id: str, filename: str) -> FileResponse:
     """Serve generated output files."""
     file_path = OUTPUTS_DIR / job_id / filename
@@ -121,12 +132,18 @@ async def download_file(job_id: str, filename: str) -> FileResponse:
     )
 
 
-@app.get("/health")
+@router.get("/health")
 async def health_check() -> dict:
     """Health check endpoint."""
     return {"status": "healthy", "version": "2.0.0"}
 
 
+app.include_router(router)
+
 # Serve static frontend files
 # This must be mounted last to avoid catching API routes
-app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
+app.mount(
+    ROUTE_PREFIX or "/",
+    StaticFiles(directory=str(STATIC_DIR), html=True),
+    name="static",
+)

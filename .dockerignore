@@ -1,0 +1,11 @@
+.git
+.github
+node_modules
+worker
+outputs
+package.json
+package-lock.json
+wrangler.jsonc
+.wrangler
+README.md
+LICENSE
