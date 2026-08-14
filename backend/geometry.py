@@ -8,6 +8,8 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
+from .schemas import CLEARANCE_MARGIN, GROOVE_DEPTH_FACTOR, MIN_PITCH_TO_WIRE_RATIO
+
 
 @dataclass
 class CoilInfo:
@@ -50,6 +52,35 @@ def build_coil_former(
     # Safety validation - cap coil diameter for PVC clearance
     max_safe_diam = pvc_id - wire_diam
     actual_coil_diam = min(coil_diameter, max_safe_diam)
+
+    # Reject combinations the geometry below can't turn into a valid solid.
+    # backend/schemas.py enforces the same constraints (with the same
+    # margins) at the API layer so requests fail fast with a clear message;
+    # these checks are a second line of defense for callers that construct
+    # geometry directly (e.g. phasing_coil.py) and bypass that layer.
+    min_coil_diam = wire_diam * GROOVE_DEPTH_FACTOR * CLEARANCE_MARGIN
+    if actual_coil_diam < min_coil_diam:
+        raise ValueError(
+            f"Coil diameter ({actual_coil_diam:.1f}mm after friction-rib "
+            f"clearance capping) is too small for a {wire_diam}mm wire/cable "
+            f"— the winding groove would cut through the center. Minimum "
+            f"coil diameter for this wire: {min_coil_diam:.1f}mm."
+        )
+    if pitch < wire_diam * MIN_PITCH_TO_WIRE_RATIO:
+        raise ValueError(
+            f"Pitch ({pitch}mm) is too small for a {wire_diam}mm wire/cable "
+            f"— adjacent turns would overlap. Minimum pitch for this wire: "
+            f"{wire_diam * MIN_PITCH_TO_WIRE_RATIO:.1f}mm."
+        )
+    if center_bore_diam is not None:
+        max_bore = actual_coil_diam - min_coil_diam
+        if center_bore_diam > max(max_bore, 0):
+            raise ValueError(
+                f"Center bore diameter ({center_bore_diam}mm) is too large "
+                f"for a {actual_coil_diam:.1f}mm coil with {wire_diam}mm "
+                f"wire/cable — there'd be no wall left for the winding "
+                f"groove. Maximum center bore diameter: {max(max_bore, 0):.1f}mm."
+            )
 
     # Derived dimensions
     cylinder_r = actual_coil_diam / 2.0

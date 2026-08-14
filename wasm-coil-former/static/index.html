@@ -565,6 +565,22 @@
         margin-top: 12px;
         font-size: 0.9rem;
         color: var(--text-dim);
+        max-width: 80%;
+        text-align: center;
+        line-height: 1.4;
+      }
+
+      .loading-overlay.error .spinner {
+        display: none;
+      }
+
+      .loading-overlay.error p {
+        color: #b3261e;
+        font-size: 0.85rem;
+      }
+
+      .warning-hint {
+        color: #b3261e !important;
       }
 
       @keyframes spin {
@@ -797,7 +813,10 @@
         </div>
 
         <div class="control-group">
-          <label>Pitch <span class="unit">mm</span></label>
+          <label>
+            Pitch <span class="unit">mm</span>
+            <span class="unit" id="pitch_min_hint"></span>
+          </label>
           <div class="slider-row">
             <input
               type="range"
@@ -1058,6 +1077,16 @@
         .replace(/\/index\.html$/, "")
         .replace(/\/$/, "");
 
+      // Geometric clearance constants — mirror backend/schemas.py exactly
+      // (same names, same values) so these slider hard-stops never allow a
+      // combination the server would reject. GROOVE_DEPTH_FACTOR matches
+      // backend/geometry.py's v_depth = r_wire * sqrt(2): the V-groove is
+      // cut to that depth below the coil's surface, so coil radius must
+      // exceed it or the groove cuts through the center axis.
+      const GROOVE_DEPTH_FACTOR = Math.sqrt(2);
+      const CLEARANCE_MARGIN = 1.1;
+      const MIN_PITCH_TO_WIRE_RATIO = 1.1;
+
       // Current job data
       let currentJob = null;
 
@@ -1149,16 +1178,41 @@
         return params;
       }
 
-      // Show/hide loading overlay
-      function setLoading(isLoading, message = "Generating geometry...") {
+      // Show/hide loading overlay. isError swaps in error styling (hides
+      // the spinner, since a shown error means generation stopped, not
+      // that it's still in progress) and drops the spinner.
+      function setLoading(isLoading, message = "Generating geometry...", isError = false) {
         const overlay = document.getElementById("loading");
         const text = document.getElementById("loading-text");
         text.textContent = message;
+        overlay.classList.toggle("error", isError);
         if (isLoading) {
           overlay.classList.remove("hidden");
         } else {
           overlay.classList.add("hidden");
         }
+      }
+
+      // Turn a failed /generate response into a message worth showing the
+      // user directly in the UI — not "see console", which is useless on
+      // mobile (no accessible devtools). FastAPI sends validation failures
+      // as either a plain string detail (explicit HTTPException, e.g. the
+      // coax-mode check) or a list of {loc, msg} objects (Pydantic
+      // model_validator errors, e.g. the geometry clearance checks in
+      // backend/schemas.py) — handle both.
+      async function describeApiError(response) {
+        try {
+          const body = await response.json();
+          if (typeof body.detail === "string") {
+            return body.detail;
+          }
+          if (Array.isArray(body.detail)) {
+            return body.detail.map((e) => e.msg).join(" ");
+          }
+        } catch (_) {
+          // Response body wasn't JSON — fall through to the generic message.
+        }
+        return `Request failed (HTTP ${response.status}).`;
       }
 
       // Enable/disable download buttons
@@ -1254,7 +1308,7 @@
           });
 
           if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
+            throw new Error(await describeApiError(response));
           }
 
           const data = await response.json();
@@ -1274,8 +1328,10 @@
         } catch (error) {
           console.error("Generation failed:", error);
           // Leave the overlay showing the error instead of hiding it, so a
-          // failure is visible rather than silently leaving an empty viewport.
-          setLoading(true, "Generation failed - see console");
+          // failure is visible rather than silently leaving an empty
+          // viewport — with the actual reason, not a pointer to devtools
+          // that may not be reachable (e.g. on mobile).
+          setLoading(true, error.message || "Generation failed.", true);
           // Params haven't changed since the user last edited them, so let
           // them retry via Apply instead of getting stuck disabled.
           setDirty(true);
@@ -1322,36 +1378,88 @@
         "frequency_mhz",
       ]);
       const coilMaxRecalcIds = new Set(["coil_diameter", "pvc_id", "wire_diam"]);
+      const pitchMinRecalcIds = new Set(["wire_diam", "pitch"]);
 
       function onParamChange() {
         setDirty(true);
       }
 
       // Cap coil diameter to what the friction-rib clearance allows (ribs
-      // must stay bigger than the coil body), and show that live so an
-      // out-of-range request doesn't just silently shrink after Apply.
+      // must stay bigger than the coil body), and floor it so the winding
+      // groove can't cut through the center axis (see GROOVE_DEPTH_FACTOR
+      // above) — a true hard stop, not just a post-Apply clamp, since the
+      // slider itself can't be dragged past either bound.
       function updateCoilDiameterMax() {
         const pvc = parseFloat(document.getElementById("pvc_id").value);
         const wd = parseFloat(document.getElementById("wire_diam").value);
         const maxCoil = pvc - wd;
+        const rawMinCoil = wd * GROOVE_DEPTH_FACTOR * CLEARANCE_MARGIN;
+        // If pvc_id is too small for this wire even at the theoretical
+        // minimum coil diameter, there's no valid coil diameter at all;
+        // fall back to maxCoil so min <= max always holds and the slider
+        // stays usable (the resulting single-point range is still a
+        // correct reflection of "no room" — pvc_id needs to grow).
+        const minCoil = Math.min(rawMinCoil, maxCoil);
         const slider = document.getElementById("coil_diameter");
         const numInput = document.getElementById("coil_diameter_num");
+        slider.min = minCoil;
+        numInput.min = minCoil;
         slider.max = maxCoil;
         numInput.max = maxCoil;
         if (parseFloat(slider.value) > maxCoil) {
           slider.value = maxCoil;
           numInput.value = maxCoil;
         }
-        document.getElementById("coil_diameter_max_hint").textContent =
-          `(max ${maxCoil.toFixed(1)})`;
+        if (parseFloat(slider.value) < minCoil) {
+          slider.value = minCoil;
+          numInput.value = minCoil;
+        }
+        // rawMinCoil > maxCoil means there's no valid coil diameter at all
+        // for this wire at the current friction rib OD — the slider above
+        // still lands on a usable (if degenerate) single-point range, but
+        // that point is still too small, so say so explicitly rather than
+        // leaving a silent dead end the user can only discover via Apply.
+        const hint = document.getElementById("coil_diameter_max_hint");
+        if (rawMinCoil > maxCoil) {
+          hint.textContent =
+            "⚠ Friction Rib Outer Diameter too small for this wire — increase it";
+          hint.classList.add("warning-hint");
+        } else {
+          hint.textContent = `(min ${minCoil.toFixed(1)} · max ${maxCoil.toFixed(1)})`;
+          hint.classList.remove("warning-hint");
+        }
       }
 
-      // Cap center bore slider max to the effective coil diameter
+      // Pitch must exceed wire/cable diameter or adjacent turns overlap —
+      // a hard stop on the slider itself, mirroring backend/schemas.py's
+      // MIN_PITCH_TO_WIRE_RATIO check.
+      function updatePitchMin() {
+        const wd = parseFloat(document.getElementById("wire_diam").value);
+        const slider = document.getElementById("pitch");
+        const numInput = document.getElementById("pitch_num");
+        const absoluteFloor = 2.0; // matches schemas.py CoilRequest.pitch's ge=2.0
+        const minPitch = Math.max(wd * MIN_PITCH_TO_WIRE_RATIO, absoluteFloor);
+        slider.min = minPitch;
+        numInput.min = minPitch;
+        if (parseFloat(slider.value) < minPitch) {
+          slider.value = minPitch;
+          numInput.value = minPitch;
+        }
+        document.getElementById("pitch_min_hint").textContent =
+          `(min ${minPitch.toFixed(1)})`;
+      }
+
+      // Cap center bore slider max to the effective coil diameter, minus
+      // the same groove-depth margin as updateCoilDiameterMax() so the
+      // bore can't grow into the winding groove and leave no wall.
       function updateBoreMax() {
         const cd = parseFloat(document.getElementById("coil_diameter").value);
         const pvc = parseFloat(document.getElementById("pvc_id").value);
         const wd = parseFloat(document.getElementById("wire_diam").value);
-        const maxBore = Math.min(cd, pvc - wd);
+        const absoluteFloor = 0.5; // matches schemas.py CoilRequest.center_bore_diam's ge=0.5
+        const rawMaxBore =
+          Math.min(cd, pvc - wd) - wd * GROOVE_DEPTH_FACTOR * CLEARANCE_MARGIN;
+        const maxBore = Math.max(rawMaxBore, absoluteFloor);
         const slider = document.getElementById("center_bore_diam");
         const numInput = document.getElementById("center_bore_diam_num");
         slider.max = maxBore;
@@ -1513,6 +1621,7 @@
             updateCoilDiameterMax();
             updateBoreMax();
           }
+          if (pitchMinRecalcIds.has(id)) updatePitchMin();
           if (liveRecalcIds.has(id)) updateLiveElectrical();
           if (coilMaxRecalcIds.has(id)) updateBendRadiusWarning();
           onParamChange();
@@ -1527,6 +1636,7 @@
               updateCoilDiameterMax();
               updateBoreMax();
             }
+            if (pitchMinRecalcIds.has(id)) updatePitchMin();
             if (liveRecalcIds.has(id)) updateLiveElectrical();
             if (coilMaxRecalcIds.has(id)) updateBendRadiusWarning();
             onParamChange();
@@ -1638,6 +1748,7 @@
           updateBoundBore();
           updateCoilDiameterMax();
           updateBoreMax();
+          updatePitchMin();
           updateBendRadiusWarning();
           updateCoaxImpedanceHint();
           updateLiveElectrical();
@@ -1726,14 +1837,16 @@
         setWireType("wire");
         updateCoilDiameterMax();
         updateBoreMax();
+        updatePitchMin();
         updateBoundBore();
         updateLiveElectrical();
         generateCoil();
       });
 
-      // Set initial coil/bore max and generate
+      // Set initial coil/bore/pitch bounds and generate
       updateCoilDiameterMax();
       updateBoreMax();
+      updatePitchMin();
       updateLiveElectrical();
       generateCoil();
     </script>

@@ -1,8 +1,25 @@
 """Pydantic request/response models for the Coil Former API."""
 
+import math
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+# Geometric clearance constants, mirrored in the frontend's live slider
+# constraints (wasm-coil-former/static/index.html) so the UI can't even
+# reach a combination this validator would reject. Keep both in sync.
+#
+# GROOVE_DEPTH_FACTOR matches backend/geometry.py's `v_depth = r_wire *
+# sqrt(2)`: the V-groove is cut to that depth below the coil's outer
+# surface, so the coil radius must exceed it or the groove cuts through
+# the center axis. CLEARANCE_MARGIN adds a safety buffer above the exact
+# boundary so users land comfortably inside valid geometry, not right at
+# the edge of it.
+GROOVE_DEPTH_FACTOR = math.sqrt(2)
+CLEARANCE_MARGIN = 1.1
+# Physical constraint independent of the above: pitch must exceed wire
+# diameter or adjacent turns overlap. The margin leaves visible separation.
+MIN_PITCH_TO_WIRE_RATIO = 1.1
 
 
 class CoilRequest(BaseModel):
@@ -105,6 +122,48 @@ class CoilRequest(BaseModel):
         le=200.0,
         description="Center bore diameter in mm (None = wire_diam + tunnel_tol)"
     )
+
+    @model_validator(mode="after")
+    def validate_geometry_clearances(self) -> "CoilRequest":
+        """Reject parameter combinations that can't produce valid geometry.
+
+        Belt-and-suspenders: the frontend keeps its sliders from reaching
+        these combinations live (see index.html), but this validator is
+        the actual source of truth and also covers direct API callers.
+        """
+        actual_coil_diam = min(self.coil_diameter, self.pvc_id - self.wire_diam)
+
+        min_coil_diam = self.wire_diam * GROOVE_DEPTH_FACTOR * CLEARANCE_MARGIN
+        if actual_coil_diam < min_coil_diam:
+            raise ValueError(
+                f"Coil diameter ({actual_coil_diam:.1f}mm after friction-rib "
+                f"clearance capping) is too small for a {self.wire_diam}mm "
+                f"wire/cable — the winding groove would cut through the "
+                f"center. Increase coil diameter or friction rib outer "
+                f"diameter, or reduce wire diameter. Minimum coil diameter "
+                f"for this wire: {min_coil_diam:.1f}mm."
+            )
+
+        min_pitch = self.wire_diam * MIN_PITCH_TO_WIRE_RATIO
+        if self.pitch < min_pitch:
+            raise ValueError(
+                f"Pitch ({self.pitch}mm) is too small for a {self.wire_diam}mm "
+                f"wire/cable — adjacent turns would overlap. Minimum pitch "
+                f"for this wire: {min_pitch:.1f}mm."
+            )
+
+        if self.center_bore_diam is not None:
+            max_bore = actual_coil_diam - min_coil_diam
+            if self.center_bore_diam > max(max_bore, 0):
+                raise ValueError(
+                    f"Center bore diameter ({self.center_bore_diam}mm) is too "
+                    f"large for a {actual_coil_diam:.1f}mm coil with "
+                    f"{self.wire_diam}mm wire/cable — there'd be no wall left "
+                    f"for the winding groove. Maximum center bore diameter: "
+                    f"{max(max_bore, 0):.1f}mm."
+                )
+
+        return self
 
 
 class ComputedValues(BaseModel):
