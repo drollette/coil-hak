@@ -84,6 +84,10 @@ Notes:
   `worker/index.js`), which controls both the API routes/static mount in
   `backend/main.py` and the download URLs it returns. Local Docker runs leave
   it unset and serve from the root as before.
+- The deploy step passes `--containers-rollout=immediate`. Without it, a
+  deploy can report success while the live (single) instance keeps serving
+  the *previous* image until it happens to go idle and restart on its own —
+  Cloudflare's default rollout doesn't touch already-running instances.
 
 ## Parameters
 

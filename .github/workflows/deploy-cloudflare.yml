@@ -28,9 +28,20 @@ jobs:
 
       # ubuntu-latest runners ship Docker preinstalled and running, which
       # `wrangler deploy` needs to build the Container image (see Dockerfile).
+      #
+      # --containers-rollout=immediate: by default Cloudflare rolls out a
+      # new container image gradually and doesn't touch already-running
+      # instances, so a deploy can silently "succeed" while the live
+      # singleton keeps serving the previous image until it happens to go
+      # idle and restart on its own (observed directly: a deploy completed
+      # but the site kept serving pre-deploy content for several minutes
+      # after, because the one running instance had stayed warm from
+      # testing). There's exactly one instance (see worker/index.js), so
+      # gradual/percentage rollout has no benefit here — force it to 100%
+      # immediately every time.
       - name: Deploy Worker + Container
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy
+          command: deploy --containers-rollout=immediate
