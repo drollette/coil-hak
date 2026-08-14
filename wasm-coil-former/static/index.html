@@ -453,10 +453,6 @@
       <aside class="sidebar collapsed" id="sidebar">
         <h2>Parameters</h2>
 
-        <button class="btn btn-primary" id="btn-apply" disabled>
-          Apply Changes
-        </button>
-
         <div class="control-group">
           <label>Wire Length <span class="unit">mm</span></label>
           <div class="slider-row">
@@ -497,28 +493,6 @@
               max="6.0"
               step="0.1"
               value="2"
-            />
-          </div>
-        </div>
-
-        <div class="control-group">
-          <label>PVC Inner Diameter <span class="unit">mm</span></label>
-          <div class="slider-row">
-            <input
-              type="range"
-              id="pvc_id"
-              min="10"
-              max="80"
-              step="0.1"
-              value="23.5"
-            />
-            <input
-              type="number"
-              id="pvc_id_num"
-              min="10"
-              max="80"
-              step="0.1"
-              value="23.5"
             />
           </div>
         </div>
@@ -666,7 +640,30 @@
             <input type="checkbox" id="enable_ribs" checked />
             <label for="enable_ribs">Enable friction ribs</label>
           </div>
+          <label>Friction Rib Outer Diameter <span class="unit">mm</span></label>
+          <div class="slider-row">
+            <input
+              type="range"
+              id="pvc_id"
+              min="10"
+              max="80"
+              step="0.1"
+              value="23.5"
+            />
+            <input
+              type="number"
+              id="pvc_id_num"
+              min="10"
+              max="80"
+              step="0.1"
+              value="23.5"
+            />
+          </div>
         </div>
+
+        <button class="btn btn-primary" id="btn-apply" disabled>
+          Apply Changes
+        </button>
 
         <div class="info-panel">
           <h3>Computed Values</h3>

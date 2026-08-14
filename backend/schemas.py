@@ -22,7 +22,12 @@ class CoilRequest(BaseModel):
         default=23.5,
         ge=10.0,
         le=100.0,
-        description="PVC pipe inner diameter in mm"
+        description=(
+            "PVC pipe inner diameter in mm. Sets the friction ribs' outer "
+            "diameter (shown in the UI as 'Friction Rib Outer Diameter') "
+            "and caps coil_diameter for clearance, regardless of whether "
+            "enable_ribs is set."
+        )
     )
     coil_diameter: float = Field(
         default=25,
