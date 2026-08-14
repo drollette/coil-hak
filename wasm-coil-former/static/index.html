@@ -391,7 +391,9 @@
         letter-spacing: 0.05em;
         color: var(--text-dim);
         display: flex;
+        flex-wrap: wrap;
         justify-content: space-between;
+        gap: 4px 16px;
       }
 
       footer a {
@@ -840,41 +842,51 @@
           computed.coil_diameter.toFixed(1) + " mm";
       }
 
-      // Load STL into Three.js scene
+      // Load STL into Three.js scene. stlUrl is already an absolute,
+      // fully-prefixed path as returned by the backend (see ROUTE_PREFIX in
+      // backend/main.py) — do not prepend API_URL here, that would double
+      // up the "/coil" prefix in production and 404.
+      // Returns a Promise so the caller can keep the loading overlay up
+      // until the mesh has actually finished loading (STLLoader is
+      // callback-based, not just the /generate POST completing).
       function loadSTLPreview(stlUrl) {
-        stlLoader.load(
-          API_URL + stlUrl,
-          (geometry) => {
-            // Remove existing mesh
-            if (coilMesh) {
-              scene.remove(coilMesh);
-              coilMesh.geometry.dispose();
+        return new Promise((resolve, reject) => {
+          stlLoader.load(
+            stlUrl,
+            (geometry) => {
+              // Remove existing mesh
+              if (coilMesh) {
+                scene.remove(coilMesh);
+                coilMesh.geometry.dispose();
+              }
+
+              // Center geometry
+              geometry.computeBoundingBox();
+              const center = new THREE.Vector3();
+              geometry.boundingBox.getCenter(center);
+              geometry.translate(-center.x, -center.y, -center.z);
+
+              geometry.computeVertexNormals();
+
+              const mat = new THREE.MeshPhongMaterial({
+                color: 0x777777,
+                specular: 0x222222,
+                shininess: 40,
+                side: THREE.DoubleSide,
+                flatShading: false,
+              });
+
+              coilMesh = new THREE.Mesh(geometry, mat);
+              scene.add(coilMesh);
+              resolve();
+            },
+            undefined,
+            (error) => {
+              console.error("Error loading STL:", error);
+              reject(error);
             }
-
-            // Center geometry
-            geometry.computeBoundingBox();
-            const center = new THREE.Vector3();
-            geometry.boundingBox.getCenter(center);
-            geometry.translate(-center.x, -center.y, -center.z);
-
-            geometry.computeVertexNormals();
-
-            const mat = new THREE.MeshPhongMaterial({
-              color: 0x777777,
-              specular: 0x222222,
-              shininess: 40,
-              side: THREE.DoubleSide,
-              flatShading: false,
-            });
-
-            coilMesh = new THREE.Mesh(geometry, mat);
-            scene.add(coilMesh);
-          },
-          undefined,
-          (error) => {
-            console.error("Error loading STL:", error);
-          }
-        );
+          );
+        });
       }
 
       // Generate coil via API
@@ -902,17 +914,19 @@
           // Update info panel
           updateInfo(data.computed);
 
-          // Load STL preview
-          loadSTLPreview(data.stl_url);
+          // Load STL preview; keep the overlay up until the mesh is
+          // actually in the scene, not just once /generate responds.
+          setLoading(true, "Loading preview...");
+          await loadSTLPreview(data.stl_url);
 
           // Enable downloads
           setDownloadEnabled(true);
+          setLoading(false);
         } catch (error) {
           console.error("Generation failed:", error);
-          document.getElementById("loading-text").textContent =
-            "Generation failed - see console";
-        } finally {
-          setLoading(false);
+          // Leave the overlay showing the error instead of hiding it, so a
+          // failure is visible rather than silently leaving an empty viewport.
+          setLoading(true, "Generation failed - see console");
         }
       }
 
@@ -1008,7 +1022,7 @@
         .addEventListener("click", () => {
           if (currentJob && currentJob.stl_url) {
             const a = document.createElement("a");
-            a.href = API_URL + currentJob.stl_url;
+            a.href = currentJob.stl_url;
             a.download = `coil_former_${getParams().wire_len}mm.stl`;
             a.click();
           }
@@ -1019,7 +1033,7 @@
         .addEventListener("click", () => {
           if (currentJob && currentJob.step_url) {
             const a = document.createElement("a");
-            a.href = API_URL + currentJob.step_url;
+            a.href = currentJob.step_url;
             a.download = `coil_former_${getParams().wire_len}mm.step`;
             a.click();
           }
