@@ -403,6 +403,27 @@
         color: var(--text);
       }
 
+      .share-link-row {
+        display: flex;
+        gap: 8px;
+      }
+
+      .share-link-row input[type="text"] {
+        flex: 1;
+        min-width: 0;
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 8px;
+        font-family: inherit;
+        font-size: 0.8rem;
+      }
+
+      .share-link-row .btn {
+        width: auto;
+        padding: 8px 14px;
+      }
+
       /* Checkbox row */
       .check-row {
         display: flex;
@@ -565,6 +586,22 @@
         margin-top: 12px;
         font-size: 0.9rem;
         color: var(--text-dim);
+        max-width: 80%;
+        text-align: center;
+        line-height: 1.4;
+      }
+
+      .loading-overlay.error .spinner {
+        display: none;
+      }
+
+      .loading-overlay.error p {
+        color: #b3261e;
+        font-size: 0.85rem;
+      }
+
+      .warning-hint {
+        color: #b3261e !important;
       }
 
       @keyframes spin {
@@ -797,7 +834,10 @@
         </div>
 
         <div class="control-group">
-          <label>Pitch <span class="unit">mm</span></label>
+          <label>
+            Pitch <span class="unit">mm</span>
+            <span class="unit" id="pitch_min_hint"></span>
+          </label>
           <div class="slider-row">
             <input
               type="range"
@@ -991,6 +1031,9 @@
             Download STEP
           </button>
         </div>
+        <button class="btn btn-secondary" id="btn-share" disabled>
+          Share Design
+        </button>
         <button class="btn btn-secondary" id="btn-reset">Reset Defaults</button>
       </aside>
 
@@ -1035,6 +1078,24 @@
       </div>
     </div>
 
+    <div class="modal-overlay hidden" id="share-modal">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3>Share This Design</h3>
+          <button type="button" class="modal-close" id="btn-close-share">
+            &times;
+          </button>
+        </div>
+        <p class="modal-note" id="share-modal-status">Creating link&hellip;</p>
+        <div class="share-link-row hidden" id="share-link-row">
+          <input type="text" id="share-link-input" readonly />
+          <button type="button" class="btn btn-primary" id="btn-copy-share-link">
+            Copy
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Three.js from CDN -->
     <script type="importmap">
       {
@@ -1050,13 +1111,38 @@
       import { OrbitControls } from "three/addons/controls/OrbitControls.js";
       import { STLLoader } from "three/addons/loaders/STLLoader.js";
 
+      // Shared-design links look like {API_URL}/{8 lowercase-hex chars}
+      // (see worker/index.js, which rewrites that exact shape to serve
+      // this SPA rather than a container 404). Matched here so a share ID
+      // can be split off the path before computing API_URL below — it has
+      // neither a trailing "/index.html" nor a trailing "/" the way the
+      // app's own root path does, so it can't be stripped the same way.
+      const SHARE_ID_PATTERN = /^[0-9a-f]{8}$/;
+
       // API URL: derived from where this page itself is served (e.g. "" at
       // the app root for local/docker dev, "/coil" when mounted under
       // w7hak.com/coil/* by the Worker route), so it stays correct without
       // hardcoding a path that has to match the backend's ROUTE_PREFIX.
-      const API_URL = window.location.pathname
+      const pathSegments = window.location.pathname
         .replace(/\/index\.html$/, "")
-        .replace(/\/$/, "");
+        .split("/")
+        .filter(Boolean);
+      const sharedDesignId =
+        pathSegments.length > 0 &&
+        SHARE_ID_PATTERN.test(pathSegments[pathSegments.length - 1])
+          ? pathSegments.pop()
+          : null;
+      const API_URL = pathSegments.length > 0 ? "/" + pathSegments.join("/") : "";
+
+      // Geometric clearance constants — mirror backend/schemas.py exactly
+      // (same names, same values) so these slider hard-stops never allow a
+      // combination the server would reject. GROOVE_DEPTH_FACTOR matches
+      // backend/geometry.py's v_depth = r_wire * sqrt(2): the V-groove is
+      // cut to that depth below the coil's surface, so coil radius must
+      // exceed it or the groove cuts through the center axis.
+      const GROOVE_DEPTH_FACTOR = Math.sqrt(2);
+      const CLEARANCE_MARGIN = 1.1;
+      const MIN_PITCH_TO_WIRE_RATIO = 1.1;
 
       // Current job data
       let currentJob = null;
@@ -1149,11 +1235,94 @@
         return params;
       }
 
-      // Show/hide loading overlay
-      function setLoading(isLoading, message = "Generating geometry...") {
+      // Inverse of getParams(): populate the form from a params object
+      // (as returned by GET /api/share/{id}), then recompute every
+      // dynamic bound/hint the same way manual edits or the coax-preset
+      // picker already do, so a loaded design isn't left with a stale
+      // coil-diameter max, pitch min, etc. from the previous defaults.
+      function applySharedParams(params) {
+        const fieldIds = [
+          "wire_len",
+          "wire_diam",
+          "pvc_id",
+          "coil_diameter",
+          "pitch",
+          "end_buffer",
+          "chamfer_size",
+          "tunnel_tol",
+          "velocity_factor",
+          "frequency_mhz",
+        ];
+        fieldIds.forEach((id) => {
+          if (params[id] === undefined || params[id] === null) return;
+          const slider = document.getElementById(id);
+          const numInput = document.getElementById(id + "_num");
+          if (!slider) return;
+          slider.value = params[id];
+          if (numInput) numInput.value = params[id];
+        });
+
+        if (params.coax_type) {
+          document.getElementById("coax_type").value = params.coax_type;
+        }
+        document.getElementById("enable_ribs").checked = !!params.enable_ribs;
+
+        const boundCheckbox = document.getElementById("center_bore_bind");
+        const boreSlider = document.getElementById("center_bore_diam");
+        const boreNumInput = document.getElementById("center_bore_diam_num");
+        if (params.center_bore_diam === null || params.center_bore_diam === undefined) {
+          boundCheckbox.checked = true;
+          boreSlider.disabled = true;
+          boreNumInput.disabled = true;
+        } else {
+          boundCheckbox.checked = false;
+          boreSlider.disabled = false;
+          boreNumInput.disabled = false;
+          boreSlider.value = params.center_bore_diam;
+          boreNumInput.value = params.center_bore_diam;
+        }
+
+        // setWireType() toggles coax-only field visibility and refreshes
+        // the live inductance/electrical-length estimate, bend-radius
+        // warning, and impedance hint — same call the Wire Type toggle
+        // and Reset Defaults use.
+        setWireType(params.wire_type === "coax" ? "coax" : "wire");
+        updateCoilDiameterMax();
+        updateBoreMax();
+        updatePitchMin();
+        updateBoundBore();
+        updateLiveElectrical();
+      }
+
+      // If the URL is a shared-design link, fetch its stored parameters
+      // and apply them. Returns whether a design was loaded, so the
+      // caller knows whether to fall back to the default bounds/generate
+      // sequence instead.
+      async function loadSharedDesign() {
+        if (!sharedDesignId) return false;
+        try {
+          const response = await fetch(`${API_URL}/api/share/${sharedDesignId}`);
+          if (!response.ok) {
+            console.warn("Shared design not found:", sharedDesignId);
+            return false;
+          }
+          const { params } = await response.json();
+          applySharedParams(params);
+          return true;
+        } catch (error) {
+          console.error("Failed to load shared design:", error);
+          return false;
+        }
+      }
+
+      // Show/hide loading overlay. isError swaps in error styling (hides
+      // the spinner, since a shown error means generation stopped, not
+      // that it's still in progress) and drops the spinner.
+      function setLoading(isLoading, message = "Generating geometry...", isError = false) {
         const overlay = document.getElementById("loading");
         const text = document.getElementById("loading-text");
         text.textContent = message;
+        overlay.classList.toggle("error", isError);
         if (isLoading) {
           overlay.classList.remove("hidden");
         } else {
@@ -1161,10 +1330,38 @@
         }
       }
 
-      // Enable/disable download buttons
+      // Turn a failed API response into a message worth showing the user
+      // directly in the UI — not "see console", which is useless on
+      // mobile (no accessible devtools). Used for both the FastAPI
+      // backend (a plain string `detail` for an explicit HTTPException,
+      // e.g. the coax-mode check; or a list of {loc, msg} objects for
+      // Pydantic model_validator errors, e.g. the geometry clearance
+      // checks in backend/schemas.py) and the Worker's own share
+      // endpoints (a plain string `error` — see worker/index.js).
+      async function describeApiError(response) {
+        try {
+          const body = await response.json();
+          if (typeof body.detail === "string") {
+            return body.detail;
+          }
+          if (Array.isArray(body.detail)) {
+            return body.detail.map((e) => e.msg).join(" ");
+          }
+          if (typeof body.error === "string") {
+            return body.error;
+          }
+        } catch (_) {
+          // Response body wasn't JSON — fall through to the generic message.
+        }
+        return `Request failed (HTTP ${response.status}).`;
+      }
+
+      // Enable/disable download buttons (and Share, which reflects the
+      // same "there's a successfully generated design" state)
       function setDownloadEnabled(enabled) {
         document.getElementById("btn-download-stl").disabled = !enabled;
         document.getElementById("btn-download-step").disabled = !enabled;
+        document.getElementById("btn-share").disabled = !enabled;
       }
 
       // Update info panel from API response
@@ -1254,7 +1451,7 @@
           });
 
           if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
+            throw new Error(await describeApiError(response));
           }
 
           const data = await response.json();
@@ -1274,8 +1471,10 @@
         } catch (error) {
           console.error("Generation failed:", error);
           // Leave the overlay showing the error instead of hiding it, so a
-          // failure is visible rather than silently leaving an empty viewport.
-          setLoading(true, "Generation failed - see console");
+          // failure is visible rather than silently leaving an empty
+          // viewport — with the actual reason, not a pointer to devtools
+          // that may not be reachable (e.g. on mobile).
+          setLoading(true, error.message || "Generation failed.", true);
           // Params haven't changed since the user last edited them, so let
           // them retry via Apply instead of getting stuck disabled.
           setDirty(true);
@@ -1322,36 +1521,88 @@
         "frequency_mhz",
       ]);
       const coilMaxRecalcIds = new Set(["coil_diameter", "pvc_id", "wire_diam"]);
+      const pitchMinRecalcIds = new Set(["wire_diam", "pitch"]);
 
       function onParamChange() {
         setDirty(true);
       }
 
       // Cap coil diameter to what the friction-rib clearance allows (ribs
-      // must stay bigger than the coil body), and show that live so an
-      // out-of-range request doesn't just silently shrink after Apply.
+      // must stay bigger than the coil body), and floor it so the winding
+      // groove can't cut through the center axis (see GROOVE_DEPTH_FACTOR
+      // above) — a true hard stop, not just a post-Apply clamp, since the
+      // slider itself can't be dragged past either bound.
       function updateCoilDiameterMax() {
         const pvc = parseFloat(document.getElementById("pvc_id").value);
         const wd = parseFloat(document.getElementById("wire_diam").value);
         const maxCoil = pvc - wd;
+        const rawMinCoil = wd * GROOVE_DEPTH_FACTOR * CLEARANCE_MARGIN;
+        // If pvc_id is too small for this wire even at the theoretical
+        // minimum coil diameter, there's no valid coil diameter at all;
+        // fall back to maxCoil so min <= max always holds and the slider
+        // stays usable (the resulting single-point range is still a
+        // correct reflection of "no room" — pvc_id needs to grow).
+        const minCoil = Math.min(rawMinCoil, maxCoil);
         const slider = document.getElementById("coil_diameter");
         const numInput = document.getElementById("coil_diameter_num");
+        slider.min = minCoil;
+        numInput.min = minCoil;
         slider.max = maxCoil;
         numInput.max = maxCoil;
         if (parseFloat(slider.value) > maxCoil) {
           slider.value = maxCoil;
           numInput.value = maxCoil;
         }
-        document.getElementById("coil_diameter_max_hint").textContent =
-          `(max ${maxCoil.toFixed(1)})`;
+        if (parseFloat(slider.value) < minCoil) {
+          slider.value = minCoil;
+          numInput.value = minCoil;
+        }
+        // rawMinCoil > maxCoil means there's no valid coil diameter at all
+        // for this wire at the current friction rib OD — the slider above
+        // still lands on a usable (if degenerate) single-point range, but
+        // that point is still too small, so say so explicitly rather than
+        // leaving a silent dead end the user can only discover via Apply.
+        const hint = document.getElementById("coil_diameter_max_hint");
+        if (rawMinCoil > maxCoil) {
+          hint.textContent =
+            "⚠ Friction Rib Outer Diameter too small for this wire — increase it";
+          hint.classList.add("warning-hint");
+        } else {
+          hint.textContent = `(min ${minCoil.toFixed(1)} · max ${maxCoil.toFixed(1)})`;
+          hint.classList.remove("warning-hint");
+        }
       }
 
-      // Cap center bore slider max to the effective coil diameter
+      // Pitch must exceed wire/cable diameter or adjacent turns overlap —
+      // a hard stop on the slider itself, mirroring backend/schemas.py's
+      // MIN_PITCH_TO_WIRE_RATIO check.
+      function updatePitchMin() {
+        const wd = parseFloat(document.getElementById("wire_diam").value);
+        const slider = document.getElementById("pitch");
+        const numInput = document.getElementById("pitch_num");
+        const absoluteFloor = 2.0; // matches schemas.py CoilRequest.pitch's ge=2.0
+        const minPitch = Math.max(wd * MIN_PITCH_TO_WIRE_RATIO, absoluteFloor);
+        slider.min = minPitch;
+        numInput.min = minPitch;
+        if (parseFloat(slider.value) < minPitch) {
+          slider.value = minPitch;
+          numInput.value = minPitch;
+        }
+        document.getElementById("pitch_min_hint").textContent =
+          `(min ${minPitch.toFixed(1)})`;
+      }
+
+      // Cap center bore slider max to the effective coil diameter, minus
+      // the same groove-depth margin as updateCoilDiameterMax() so the
+      // bore can't grow into the winding groove and leave no wall.
       function updateBoreMax() {
         const cd = parseFloat(document.getElementById("coil_diameter").value);
         const pvc = parseFloat(document.getElementById("pvc_id").value);
         const wd = parseFloat(document.getElementById("wire_diam").value);
-        const maxBore = Math.min(cd, pvc - wd);
+        const absoluteFloor = 0.5; // matches schemas.py CoilRequest.center_bore_diam's ge=0.5
+        const rawMaxBore =
+          Math.min(cd, pvc - wd) - wd * GROOVE_DEPTH_FACTOR * CLEARANCE_MARGIN;
+        const maxBore = Math.max(rawMaxBore, absoluteFloor);
         const slider = document.getElementById("center_bore_diam");
         const numInput = document.getElementById("center_bore_diam_num");
         slider.max = maxBore;
@@ -1513,6 +1764,7 @@
             updateCoilDiameterMax();
             updateBoreMax();
           }
+          if (pitchMinRecalcIds.has(id)) updatePitchMin();
           if (liveRecalcIds.has(id)) updateLiveElectrical();
           if (coilMaxRecalcIds.has(id)) updateBendRadiusWarning();
           onParamChange();
@@ -1527,6 +1779,7 @@
               updateCoilDiameterMax();
               updateBoreMax();
             }
+            if (pitchMinRecalcIds.has(id)) updatePitchMin();
             if (liveRecalcIds.has(id)) updateLiveElectrical();
             if (coilMaxRecalcIds.has(id)) updateBendRadiusWarning();
             onParamChange();
@@ -1638,6 +1891,7 @@
           updateBoundBore();
           updateCoilDiameterMax();
           updateBoreMax();
+          updatePitchMin();
           updateBendRadiusWarning();
           updateCoaxImpedanceHint();
           updateLiveElectrical();
@@ -1701,6 +1955,71 @@
           }
         });
 
+      // Share: POST the current params to the Worker-handled share API
+      // (not the FastAPI backend — see worker/index.js), which stores
+      // them in KV and hands back a short ID. The resulting link is a
+      // plain /coil/{id} path; loadSharedDesign() above is what makes
+      // visiting it load the design back in.
+      document.getElementById("btn-share").addEventListener("click", async () => {
+        const modal = document.getElementById("share-modal");
+        const statusEl = document.getElementById("share-modal-status");
+        const linkRow = document.getElementById("share-link-row");
+        const linkInput = document.getElementById("share-link-input");
+
+        linkRow.classList.add("hidden");
+        statusEl.textContent = "Creating link…";
+        statusEl.classList.remove("hidden");
+        modal.classList.remove("hidden");
+
+        try {
+          const response = await fetch(`${API_URL}/api/share`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(getParams()),
+          });
+          if (!response.ok) {
+            throw new Error(await describeApiError(response));
+          }
+          const { id } = await response.json();
+          linkInput.value = `${window.location.origin}${API_URL}/${id}`;
+          statusEl.classList.add("hidden");
+          linkRow.classList.remove("hidden");
+          linkInput.focus();
+          linkInput.select();
+        } catch (error) {
+          console.error("Share failed:", error);
+          statusEl.textContent = `Couldn't create link: ${error.message}`;
+        }
+      });
+
+      document.getElementById("btn-close-share").addEventListener("click", () => {
+        document.getElementById("share-modal").classList.add("hidden");
+      });
+      document.getElementById("share-modal").addEventListener("click", (e) => {
+        if (e.target.id === "share-modal") e.target.classList.add("hidden");
+      });
+
+      document
+        .getElementById("btn-copy-share-link")
+        .addEventListener("click", async () => {
+          const linkInput = document.getElementById("share-link-input");
+          const btn = document.getElementById("btn-copy-share-link");
+          try {
+            await navigator.clipboard.writeText(linkInput.value);
+            const original = btn.textContent;
+            btn.textContent = "Copied!";
+            setTimeout(() => {
+              btn.textContent = original;
+            }, 1500);
+          } catch (error) {
+            // Clipboard API unavailable (e.g. no secure context, or
+            // permission denied) — the input is already focused/selected,
+            // so manual copy still works.
+            linkInput.focus();
+            linkInput.select();
+          }
+        });
+
       // Reset defaults
       const defaults = {
         wire_len: 668,
@@ -1726,16 +2045,30 @@
         setWireType("wire");
         updateCoilDiameterMax();
         updateBoreMax();
+        updatePitchMin();
         updateBoundBore();
         updateLiveElectrical();
+        // A reset moving off a loaded shared design shouldn't leave the
+        // share link in the address bar — reloading would otherwise
+        // re-fetch and reapply the design just cleared.
+        if (sharedDesignId) {
+          history.replaceState(null, "", API_URL === "" ? "/" : `${API_URL}/`);
+        }
         generateCoil();
       });
 
-      // Set initial coil/bore max and generate
-      updateCoilDiameterMax();
-      updateBoreMax();
-      updateLiveElectrical();
-      generateCoil();
+      // Set initial coil/bore/pitch bounds and generate — or, if the URL
+      // is a shared-design link, load and generate that instead.
+      (async () => {
+        const loadedShared = await loadSharedDesign();
+        if (!loadedShared) {
+          updateCoilDiameterMax();
+          updateBoreMax();
+          updatePitchMin();
+          updateLiveElectrical();
+        }
+        generateCoil();
+      })();
     </script>
   </body>
 </html>

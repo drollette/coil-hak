@@ -14,6 +14,18 @@
     }
   ],
 
+  // Same underlying KV namespace as w7hak.com's guestbook (see
+  // w7hak.com/wrangler.toml, bound there as GUESTBOOK_KV) — reused here
+  // under its own binding name for shared coil-design links. Keys are
+  // prefixed "coilshare:" (see worker/index.js) so the two datasets never
+  // collide despite sharing one namespace.
+  "kv_namespaces": [
+    {
+      "binding": "SHARES_KV",
+      "id": "6aa1cc766242433f9a0314bcd616340c"
+    }
+  ],
+
   "containers": [
     {
       "class_name": "CoilFormerContainer",
