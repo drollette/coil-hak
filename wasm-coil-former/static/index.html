@@ -699,13 +699,19 @@
         </div>
 
         <div class="control-group coax-only hidden">
-          <label>Coax Type</label>
+          <label>
+            Coax Type
+            <span class="unit" id="coax_impedance_hint"></span>
+          </label>
           <select id="coax_type">
             <option value="rg58">RG-58</option>
             <option value="rg8x">RG-8X</option>
             <option value="rg213">RG-213</option>
             <option value="rg6">RG-6</option>
             <option value="lmr400">LMR-400</option>
+            <option value="rg316">RG-316</option>
+            <option value="rg174">RG-174</option>
+            <option value="rg142">RG-142</option>
             <option value="custom">Custom</option>
           </select>
         </div>
@@ -1565,8 +1571,22 @@
           coaxTypes = types;
           renderSourcesModal();
           updateBendRadiusWarning();
+          updateCoaxImpedanceHint();
         })
         .catch((err) => console.error("Failed to load coax types:", err));
+
+      // Impedance is reference info only (not used in any calculation —
+      // electrical length depends only on velocity factor and frequency),
+      // but matters to the user up front: mixing 50ohm and 75ohm sections
+      // in a phasing line is a real mistake to avoid.
+      function updateCoaxImpedanceHint() {
+        const hint = document.getElementById("coax_impedance_hint");
+        const type = coaxTypes.find(
+          (t) => t.id === document.getElementById("coax_type").value
+        );
+        hint.textContent =
+          type && type.impedance_ohms != null ? `${type.impedance_ohms}Ω` : "";
+      }
 
       function setWireType(type) {
         currentWireType = type;
@@ -1586,6 +1606,7 @@
           type === "coax" ? "Cable Outer Diameter" : "Wire Diameter";
         updateLiveElectrical();
         updateBendRadiusWarning();
+        updateCoaxImpedanceHint();
         onParamChange();
       }
 
@@ -1618,6 +1639,7 @@
           updateCoilDiameterMax();
           updateBoreMax();
           updateBendRadiusWarning();
+          updateCoaxImpedanceHint();
           updateLiveElectrical();
           onParamChange();
         });
