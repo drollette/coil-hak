@@ -25,6 +25,11 @@ STATIC_DIR = BASE_DIR / "wasm-coil-former" / "static"
 # Ensure outputs directory exists
 OUTPUTS_DIR.mkdir(exist_ok=True)
 
+# Params for jobs whose STEP file hasn't been generated yet (see /generate
+# and the lazy-export branch in download_file below), keyed by job_id.
+# Cleared alongside the job's output directory in cleanup_job.
+_pending_step_params: dict[str, CoilRequest] = {}
+
 # When deployed behind the w7hak.com Worker route (path-based routing, no
 # subdomain), requests arrive with the full "/coil" prefix still attached
 # rather than stripped by a reverse proxy, so the app must serve routes and
@@ -53,19 +58,28 @@ async def cleanup_job(job_id: str, delay: int = 3600) -> None:
     await asyncio.sleep(delay)
     job_dir = OUTPUTS_DIR / job_id
     shutil.rmtree(job_dir, ignore_errors=True)
+    _pending_step_params.pop(job_id, None)
 
 
 router = APIRouter(prefix=ROUTE_PREFIX)
 
 
 @router.post("/generate", response_model=CoilResponse)
-async def generate_coil(
+def generate_coil(
     request: CoilRequest,
     background_tasks: BackgroundTasks
 ) -> CoilResponse:
     """
     Generate a coil former with the specified parameters.
     Returns URLs to download STL and STEP files.
+
+    Deliberately a sync (not async) def: this does no awaiting, it's a
+    single CPU-bound CadQuery/OpenCASCADE computation. FastAPI runs sync
+    route handlers in a threadpool automatically, so this doesn't block the
+    event loop (and therefore every other concurrent request — health
+    checks, static assets, other jobs) for the several-second duration of a
+    geometry rebuild the way an `async def` doing the same blocking work
+    in-line would.
     """
     # Generate unique job ID
     job_id = str(uuid.uuid4())
@@ -86,12 +100,13 @@ async def generate_coil(
         center_bore_diam=request.center_bore_diam,
     )
 
-    # Export files
+    # Only export STL here. STEP export is extra OpenCASCADE/export work
+    # that's wasted on every interactive parameter tweak when the user just
+    # wants the 3D preview — it's built lazily in download_file() the first
+    # time (if ever) someone actually clicks "Download STEP" for this job.
     stl_path = job_dir / "coil.stl"
-    step_path = job_dir / "coil.step"
-
     export_stl(result, stl_path)
-    export_step(result, step_path)
+    _pending_step_params[job_id] = request
 
     # Schedule cleanup
     background_tasks.add_task(cleanup_job, job_id)
@@ -110,9 +125,28 @@ async def generate_coil(
 
 
 @router.get("/outputs/{job_id}/{filename}")
-async def download_file(job_id: str, filename: str) -> FileResponse:
-    """Serve generated output files."""
+def download_file(job_id: str, filename: str) -> FileResponse:
+    """Serve generated output files (sync def — see generate_coil)."""
     file_path = OUTPUTS_DIR / job_id / filename
+
+    if not file_path.exists() and filename == "coil.step":
+        # Not exported at /generate time (see there) — build it now, on the
+        # one request that actually needs it.
+        request = _pending_step_params.get(job_id)
+        if request is not None:
+            result, _ = build_coil_former(
+                wire_len=request.wire_len,
+                wire_diam=request.wire_diam,
+                pvc_id=request.pvc_id,
+                coil_diameter=request.coil_diameter,
+                pitch=request.pitch,
+                end_buffer=request.end_buffer,
+                enable_ribs=request.enable_ribs,
+                chamfer_size=request.chamfer_size,
+                tunnel_tol=request.tunnel_tol,
+                center_bore_diam=request.center_bore_diam,
+            )
+            export_step(result, file_path)
 
     if not file_path.exists():
         from fastapi import HTTPException
