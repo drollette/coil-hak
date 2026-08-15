@@ -1,5 +1,3 @@
-import { Container, getContainer } from "@cloudflare/containers";
-
 // Shared coil-design links. Handled entirely here in the Worker (not
 // proxied to the container) since the KV binding lives on the Worker/
 // Durable Object side, not inside the Docker container — the FastAPI
@@ -89,61 +87,22 @@ async function handleShareRoutes(request, env, url) {
   return null;
 }
 
-// Cloudflare Container wrapping the existing FastAPI/CadQuery Dockerfile.
-// One instance for everything ("singleton"): the backend writes generated
-// STL/STEP files to local disk keyed by job UUID, so a later download must
-// hit the same instance that ran the /generate request.
-export class CoilFormerContainer extends Container {
-  defaultPort = 8000;
-  sleepAfter = "10m";
-  envVars = {
-    // Tells the FastAPI app it's mounted at /coil rather than the domain
-    // root, so it serves routes/static files and builds download URLs
-    // under that prefix. See backend/main.py.
-    ROUTE_PREFIX: "/coil",
-  };
-
-  // The default port-readiness wait (20s) is too short for this image: it's
-  // a mamba/conda environment that has to import CadQuery/OpenCASCADE before
-  // uvicorn even starts listening, which routinely takes longer than that on
-  // a cold start (observed up to ~100s). Without this override, requests
-  // that arrive while the container is still starting fail outright with
-  // "container is not listening" / "container is not running" instead of
-  // waiting for it. See https://github.com/cloudflare/containers/issues/139.
-  async fetch(request) {
-    await this.startAndWaitForPorts({
-      ports: [this.defaultPort],
-      cancellationOptions: {
-        portReadyTimeoutMS: 120_000,
-      },
-    });
-    return this.containerFetch(request);
-  }
-}
-
+// The Cloudflare Container (Python/CadQuery FastAPI backend) this Worker
+// used to proxy to is retired -- deleted, along with the wrangler.jsonc
+// "routes" entry that claimed w7hak.com/coil/* on the zone, in favor of
+// a client-side (replicad/OpenCascade.js) port living in the w7hak.com
+// repo (src/lib/coilGeometry.js), served natively by that Pages project.
+// With no route bound, nothing on the zone reaches this Worker's fetch
+// handler anymore -- it's left deployed but unreachable rather than
+// deleted outright, since handleShareRoutes()'s share-link create/load
+// logic (still fully functional, independent of the container) may be
+// useful reference for rebuilding sharing natively via w7hak.com Pages
+// Functions (see that repo's task list).
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-
     const shareResponse = await handleShareRoutes(request, env, url);
     if (shareResponse) return shareResponse;
-
-    // A bare /coil/{8-hex-chars} path is a shared-design link. The
-    // container has no file at that path (its static mount only knows
-    // about index.html — see backend/main.py), so rewrite the outbound
-    // request to serve the SPA shell instead of a 404. This only changes
-    // what's sent to the container; the browser's address bar keeps
-    // showing /coil/{id}, which the frontend reads client-side (see
-    // wasm-coil-former/static/index.html) to fetch the design from
-    // /coil/api/share/{id} and load it in.
-    const bareSegment = url.pathname.replace(/^\/coil\/?/, "");
-    if (SHARE_ID_PATTERN.test(bareSegment)) {
-      const rewritten = new URL(url);
-      rewritten.pathname = "/coil/";
-      request = new Request(rewritten, request);
-    }
-
-    const container = getContainer(env.COIL_CONTAINER, "singleton");
-    return container.fetch(request);
+    return new Response("Not found", { status: 404 });
   },
 };
