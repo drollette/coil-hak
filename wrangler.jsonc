@@ -4,16 +4,16 @@
   "main": "worker/index.js",
   "compatibility_date": "2026-08-14",
 
-  // Path-based routing: this Worker owns /coil/* on the w7hak.com zone.
-  // Everything else on the zone continues to be served by the w7hak.com
-  // Cloudflare Pages project, unaffected by this deploy.
-  "routes": [
-    {
-      "pattern": "w7hak.com/coil/*",
-      "zone_name": "w7hak.com"
-    }
-  ],
-
+  // /coil/* on the w7hak.com zone is no longer claimed here: the
+  // container backing this Worker was decommissioned in favor of a
+  // client-side (replicad/OpenCascade.js) port living in the w7hak.com
+  // repo (src/lib/coilGeometry.js), served natively by that Pages
+  // project. Leaving the old route bound with no working container
+  // behind it left w7hak.com/coil/* hanging/erroring for real visitors,
+  // so it's removed here rather than left dangling while the new
+  // implementation is finished. See w7hak.com's README/CLAUDE.md for
+  // the new tool's status.
+  //
   // Same underlying KV namespace as w7hak.com's guestbook (see
   // w7hak.com/wrangler.toml, bound there as GUESTBOOK_KV) — reused here
   // under its own binding name for shared coil-design links. Keys are
@@ -26,35 +26,20 @@
     }
   ],
 
-  "containers": [
-    {
-      "class_name": "CoilFormerContainer",
-      "image": "./Dockerfile",
-      // CadQuery/OpenCASCADE needs more headroom than the default "lite"
-      // instance (256 MiB). Bump this up (or down) in the dashboard if
-      // generation is slow/OOMing or if it's comfortably idle.
-      "instance_type": "standard-1",
-      // Job output files live on the container's local disk (see
-      // backend/main.py OUTPUTS_DIR), not shared storage, so a "generate"
-      // and the follow-up "download" must land on the same instance.
-      // Keep this at 1 unless that's reworked to use shared storage.
-      "max_instances": 1
-    }
-  ],
-
-  "durable_objects": {
-    "bindings": [
-      {
-        "class_name": "CoilFormerContainer",
-        "name": "COIL_CONTAINER"
-      }
-    ]
-  },
-
+  // The CoilFormerContainer Durable Object class (and the container image
+  // it wrapped) is retired -- deleted via the dashboard, and this
+  // migration tombstones the binding so `wrangler deploy` doesn't try to
+  // recreate it. Both the "containers" and "durable_objects" config
+  // blocks that used to reference this class are removed in the same
+  // deploy as this migration, per Cloudflare's required deletion order.
   "migrations": [
     {
       "tag": "v1",
       "new_sqlite_classes": ["CoilFormerContainer"]
+    },
+    {
+      "tag": "v2",
+      "deleted_classes": ["CoilFormerContainer"]
     }
   ],
 
